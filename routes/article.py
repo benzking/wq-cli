@@ -73,11 +73,9 @@ async def get_article(article_request: ArticleRequest, request: Request):
     try:
         logger.info("[Article] request from %s: %s", client_ip, article_request.url[:80])
 
-        html = await fetch_page(
-            article_request.url,
-            extra_headers={"Referer": "https://mp.weixin.qq.com/"},
-            timeout=120
-        )
+        from utils.article_fetcher import fallback_fetcher
+
+        html = await fallback_fetcher.fetch(article_request.url, timeout=60)
 
         if not has_article_content(html):
             if "verify" in html or "验证" in html or "环境异常" in html:

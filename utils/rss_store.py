@@ -131,8 +131,48 @@ def init_db():
         conn.commit()
         logger.info("Added source column and index to articles table")
     
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS config (
+            key        TEXT PRIMARY KEY,
+            value      TEXT NOT NULL DEFAULT '',
+            updated_at INTEGER NOT NULL DEFAULT 0
+        );
+    """)
+    conn.commit()
+
     conn.close()
     logger.info("RSS database initialized: %s", DB_PATH)
+
+
+# ── 配置管理 ─────────────────────────────────────────────
+
+
+def get_config(key: str) -> Optional[str]:
+    """读取配置值，不存在返回 None"""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT value FROM config WHERE key=?", (key,)
+        ).fetchone()
+        return row["value"] if row else None
+    finally:
+        conn.close()
+
+
+def set_config(key: str, value: str) -> bool:
+    """写入配置（upsert），返回是否成功"""
+    import time
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "INSERT INTO config (key, value, updated_at) VALUES (?,?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            (key, value, int(time.time())),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
 
 
 # ── 订阅管理 ─────────────────────────────────────────────

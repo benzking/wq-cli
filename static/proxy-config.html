@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>节点配置 — WeChat Download API</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; gap: 24px; }
+  .header h1 { font-size: 18px; }
+  .header a { color: #a0a0c0; text-decoration: none; font-size: 14px; }
+  .header a:hover { color: #fff; }
+  .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 20px; }
+  .card h2 { font-size: 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 4px; color: #fff; }
+  .badge-l1 { background: #4caf50; }
+  .badge-l2 { background: #ff9800; }
+  .badge-l3 { background: #2196f3; }
+  textarea { width: 100%; min-height: 100px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: monospace; resize: vertical; }
+  .hint { font-size: 12px; color: #999; margin-top: 4px; }
+  .route-banner { background: #e8f5e9; border-radius: 6px; padding: 12px 16px; font-size: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+  .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600; }
+  .btn-primary { background: #1a73e8; color: #fff; }
+  .btn-primary:hover { background: #1557b0; }
+  .btn-outline { background: #fff; color: #1a73e8; border: 1px solid #1a73e8; }
+  .btn-outline:hover { background: #e8f0fe; }
+  .btn-danger { background: #fff; color: #d93025; border: 1px solid #d93025; }
+  .btn-danger:hover { background: #fce8e6; }
+  .btn-group { display: flex; gap: 8px; margin-top: 12px; }
+  .result { margin-top: 12px; padding: 10px; border-radius: 6px; font-size: 13px; }
+  .result-ok { background: #e8f5e9; color: #2e7d32; }
+  .result-err { background: #ffebee; color: #c62828; }
+  .test-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+  .test-table th { text-align: left; padding: 8px; background: #f5f5f5; border-bottom: 2px solid #ddd; }
+  .test-table td { padding: 8px; border-bottom: 1px solid #eee; }
+  .status-ok { color: #2e7d32; font-weight: 600; }
+  .status-fail { color: #c62828; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>WeChat Download API</h1>
+  <a href="/admin.html">管理</a>
+  <a href="/rss.html">RSS</a>
+  <a href="/proxy-config.html" style="color:#fff;font-weight:600;">节点配置</a>
+  <a href="/blacklist.html">黑名单</a>
+  <a href="/categories.html">分类</a>
+  <a href="/history.html">历史文章</a>
+</div>
+
+<div class="container">
+  <div class="route-banner">
+    <strong>当前回落链路：</strong><span id="effectiveRoute">加载中...</span>
+  </div>
+
+  <div class="card">
+    <h2><span class="badge badge-l1">L1</span> CF Worker 节点</h2>
+    <p style="font-size:13px;color:#999;margin-bottom:12px;">每行一个 Worker URL，如 <code>https://00.worker-proxy.asia</code></p>
+    <textarea id="cfWorkerUrls" placeholder="https://your-worker.dev&#10;https://another-worker.dev"></textarea>
+    <div class="hint">留空则跳过 L1，直接进入 L2</div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+      <button class="btn btn-outline" onclick="testNodes()">测试节点</button>
+      <button class="btn btn-danger" onclick="resetConfig()">恢复 .env 默认</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="badge badge-l2">L2</span> SOCKS5 代理</h2>
+    <p style="font-size:13px;color:#999;margin-bottom:12px;">每行一个代理地址</p>
+    <textarea id="proxyUrls" placeholder="socks5://ip1:1080&#10;socks5://user:pass@ip2:1080"></textarea>
+    <div class="hint">留空则跳过 L2，直接进入 L3</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="badge badge-l3">L3</span> 直连（兜底）</h2>
+    <p style="font-size:13px;color:#999;">始终启用，无需配置</p>
+  </div>
+
+  <div class="card" id="testCard" style="display:none;">
+    <h2>节点测试结果</h2>
+    <table class="test-table" id="testResults"><tbody></tbody></table>
+  </div>
+
+  <div id="msgBox"></div>
+</div>
+
+<script>
+const API = '/api/admin/fetch-config';
+
+async function loadConfig() {
+  try {
+    const resp = await fetch(API);
+    const data = await resp.json();
+    document.getElementById('cfWorkerUrls').value = (data.cf_worker_urls || []).join('\n');
+    document.getElementById('proxyUrls').value = (data.proxy_urls || []).join('\n');
+    document.getElementById('effectiveRoute').textContent = data.effective_route || '—';
+  } catch(e) {
+    showMsg('加载配置失败: ' + e.message, false);
+  }
+}
+
+async function saveConfig() {
+  const cfUrls = document.getElementById('cfWorkerUrls').value
+    .split('\n').map(s => s.trim()).filter(s => s);
+  const proxyUrls = document.getElementById('proxyUrls').value
+    .split('\n').map(s => s.trim()).filter(s => s);
+
+  try {
+    const resp = await fetch(API, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cf_worker_urls: cfUrls, proxy_urls: proxyUrls}),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      document.getElementById('effectiveRoute').textContent = data.effective_route || '—';
+      showMsg('配置已保存: ' + data.effective_route, true);
+    } else {
+      showMsg('保存失败', false);
+    }
+  } catch(e) {
+    showMsg('保存失败: ' + e.message, false);
+  }
+}
+
+async function testNodes() {
+  const card = document.getElementById('testCard');
+  const tbody = document.getElementById('testResults').querySelector('tbody');
+  card.style.display = 'block';
+  tbody.innerHTML = '<tr><td colspan="5">测试中...</td></tr>';
+
+  try {
+    const resp = await fetch(API + '/test');
+    const data = await resp.json();
+    tbody.innerHTML = '';
+    if (!data.results || data.results.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5">没有配置任何节点</td></tr>';
+      return;
+    }
+    data.results.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        `<td><span class="badge badge-${r.level.toLowerCase()}">${r.level}</span></td>
+         <td>${r.node}</td>
+         <td class="${r.status === 'ok' ? 'status-ok' : 'status-fail'}">${r.status === 'ok' ? 'OK' : 'FAIL'}</td>
+         <td>${r.latency_ms != null ? r.latency_ms + ' ms' : '—'}</td>
+         <td style="font-size:12px;color:#999;">${r.error || ''}</td>`;
+      tbody.appendChild(tr);
+    });
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="5">测试失败: ' + e.message + '</td></tr>';
+  }
+}
+
+async function resetConfig() {
+  if (!confirm('确认恢复为 .env 文件中的默认配置？这将清空 Web 页面配置。')) return;
+  try {
+    const resp = await fetch(API + '/reset', {method: 'POST'});
+    const data = await resp.json();
+    document.getElementById('effectiveRoute').textContent = data.effective_route || '—';
+    await loadConfig();
+    showMsg('已恢复 .env 默认配置: ' + data.effective_route, true);
+  } catch(e) {
+    showMsg('重置失败: ' + e.message, false);
+  }
+}
+
+function showMsg(msg, ok) {
+  const box = document.getElementById('msgBox');
+  box.innerHTML = '<div class="result ' + (ok ? 'result-ok' : 'result-err') + '">' + msg + '</div>';
+  setTimeout(function() { box.innerHTML = ''; }, 5000);
+}
+
+loadConfig();
+</script>
+</body>
+</html>

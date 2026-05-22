@@ -31,12 +31,16 @@ class StatusResponse(BaseModel):
     expireTime: Optional[int] = 0
     isExpired: Optional[bool] = False
     status: str
+    effective_route: Optional[str] = ""
 
 
 @router.get("/status", response_model=StatusResponse, summary="获取登录状态")
 async def get_status():
     """获取当前登录状态"""
-    return auth_manager.get_status()
+    from utils.fetcher_config import get_active_levels
+    result = auth_manager.get_status()
+    result["effective_route"] = " → ".join(get_active_levels())
+    return result
 
 
 @router.post("/logout", summary="退出登录")
@@ -449,3 +453,111 @@ async def _fetch_history_internal(fakeid: str, target_count: int) -> tuple:
     new_count = rss_store.save_articles(fakeid, historical_articles, source='deep_fetch')
     
     return len(historical_articles), new_count
+
+
+# ── 回落配置管理 ─────────────────────────────────────────────
+
+
+class FetchConfigResponse(BaseModel):
+    cf_worker_urls: List[str] = Field(default_factory=list)
+    proxy_urls: List[str] = Field(default_factory=list)
+    active_levels: List[str] = Field(default_factory=list)
+    effective_route: str = ""
+
+
+class UpdateConfigRequest(BaseModel):
+    cf_worker_urls: Optional[List[str]] = None
+    proxy_urls: Optional[List[str]] = None
+
+
+@router.get("/fetch-config", summary="获取回落配置")
+async def get_fetch_config():
+    from utils.fetcher_config import (get_cf_worker_urls, get_proxy_urls,
+                                       get_active_levels)
+    active = get_active_levels()
+    return FetchConfigResponse(
+        cf_worker_urls=get_cf_worker_urls(),
+        proxy_urls=get_proxy_urls(),
+        active_levels=active,
+        effective_route=" → ".join(active),
+    )
+
+
+@router.put("/fetch-config", summary="更新回落配置")
+async def update_fetch_config(req: UpdateConfigRequest):
+    from utils.fetcher_config import (set_cf_worker_urls, set_proxy_urls,
+                                       get_active_levels)
+    from utils.proxy_pool import proxy_pool
+
+    if req.cf_worker_urls is not None:
+        cleaned = list(dict.fromkeys(
+            u.strip() for u in req.cf_worker_urls
+            if isinstance(u, str) and u.strip() and u.strip().startswith("http")
+        ))
+        set_cf_worker_urls(cleaned)
+
+    if req.proxy_urls is not None:
+        cleaned = list(dict.fromkeys(
+            p.strip() for p in req.proxy_urls
+            if isinstance(p, str) and p.strip()
+        ))
+        set_proxy_urls(cleaned)
+
+    proxy_pool.reload()
+
+    active = get_active_levels()
+    return {
+        "success": True,
+        "message": "配置已更新",
+        "active_levels": active,
+        "effective_route": " → ".join(active),
+    }
+
+
+@router.post("/fetch-config/reset", summary="重置回落配置")
+async def reset_fetch_config():
+    from utils.fetcher_config import reset_to_env, get_active_levels
+    from utils.proxy_pool import proxy_pool
+
+    reset_to_env()
+    proxy_pool.reload()
+
+    active = get_active_levels()
+    return {
+        "success": True,
+        "message": "已恢复为 .env 配置",
+        "active_levels": active,
+        "effective_route": " → ".join(active),
+    }
+
+
+@router.get("/fetch-config/test", summary="测试回落节点")
+async def test_fetch_config():
+    from utils.cf_worker_client import cf_worker_client
+    import time
+
+    results = await cf_worker_client.test_nodes()
+
+    from utils.proxy_pool import proxy_pool
+    from utils.http_client import fetch_page
+    for proxy in proxy_pool.get_all():
+        start = time.monotonic()
+        try:
+            html = await fetch_page(
+                "https://mp.weixin.qq.com/",
+                extra_headers={"Referer": "https://mp.weixin.qq.com/"},
+                timeout=15,
+            )
+            latency = (time.monotonic() - start) * 1000
+            results.append({
+                "level": "L2", "node": proxy, "status": "ok",
+                "latency_ms": round(latency, 1),
+            })
+        except Exception as e:
+            latency = (time.monotonic() - start) * 1000
+            results.append({
+                "level": "L2", "node": proxy, "status": "fail",
+                "latency_ms": round(latency, 1), "error": str(e)[:100],
+            })
+
+    return {"results": results}

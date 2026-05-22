@@ -54,11 +54,14 @@ _executor = ThreadPoolExecutor(max_workers=4)
 
 
 async def fetch_page(url: str, extra_headers: Optional[Dict] = None,
-                     timeout: int = 30) -> str:
+                     timeout: int = 30, allow_direct_fallback: bool = True) -> str:
     """
     获取网页 HTML 内容。
     请求策略：代理1 → 代理2 → ... → 直连兜底。
     成功的代理会被标记为健康，失败的会被临时冷却。
+
+    allow_direct_fallback=False 时，所有代理失败后抛异常而非直连，
+    用于回落调度器中 L2 和 L3 的独立分级。
     """
     from utils.proxy_pool import proxy_pool
 
@@ -82,8 +85,10 @@ async def fetch_page(url: str, extra_headers: Optional[Dict] = None,
             logger.warning("Proxy %s failed: %s", proxy, e)
             proxy_pool.mark_failed(proxy)
 
-    logger.info("fetch_page: url=%s proxy=direct (fallback)", url[:80])
-    return await _do_fetch(url, headers, timeout, None)
+    if allow_direct_fallback:
+        logger.info("fetch_page: url=%s proxy=direct (fallback)", url[:80])
+        return await _do_fetch(url, headers, timeout, None)
+    raise Exception("All proxies failed and direct fallback disabled")
 
 
 async def _do_fetch(url: str, headers: Dict, timeout: int,

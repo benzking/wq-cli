@@ -270,8 +270,10 @@ class RSSPoller:
             article_links = article_links[:max_fetch]
             articles = articles[:max_fetch]
         
-        logger.info("开始批量获取 %d 篇文章的完整内容", len(article_links))
-        
+        import secrets
+        tid = secrets.token_hex(4)
+        logger.info("[Poll %s] fetching full content for %d articles", tid, len(article_links))
+
         # 获取微信凭证（从环境变量读取）
         wechat_token = os.getenv("WECHAT_TOKEN", "")
         wechat_cookie = os.getenv("WECHAT_COOKIE", "")

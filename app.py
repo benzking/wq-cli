@@ -59,14 +59,19 @@ async def lifespan(app: FastAPI):
 
     init_db()
     await rss_poller.start()
-    
+
+    # 启动 CF Worker 客户端（后台健康探测）
+    from utils.cf_worker_client import cf_worker_client
+    await cf_worker_client.start()
+
     # 启动登录过期提醒器（自动检测凭证有效期并 webhook 通知）
     from utils.login_reminder import login_reminder
     await login_reminder.start()
-    
+
     yield
-    
+
     await login_reminder.stop()
+    await cf_worker_client.stop()
     await rss_poller.stop()
 
 
@@ -165,6 +170,11 @@ async def blacklist_page():
 async def history_page():
     """历史文章获取页面"""
     return FileResponse(static_dir / "history.html")
+
+@app.get("/proxy-config.html", include_in_schema=False)
+async def proxy_config_page():
+    """回落节点配置页面"""
+    return FileResponse(static_dir / "proxy-config.html")
 
 if __name__ == "__main__":
     import os

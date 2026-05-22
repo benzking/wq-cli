@@ -16,10 +16,12 @@ router = APIRouter()
 @router.get("/health", summary="健康检查")
 async def health_check():
     """
-    检查服务健康状态，包括 HTTP 引擎和代理池信息。
+    检查服务健康状态，包括 HTTP 引擎、代理池和回落状态。
     """
     from utils.http_client import ENGINE_NAME
     from utils.proxy_pool import proxy_pool
+    from utils.fetcher_config import get_active_levels
+    from utils.cf_worker_client import cf_worker_client
 
     return {
         "status": "healthy",
@@ -27,4 +29,8 @@ async def health_check():
         "framework": "FastAPI",
         "http_engine": ENGINE_NAME,
         "proxy_pool": proxy_pool.get_status(),
+        "fallback": {
+            "active_levels": get_active_levels(),
+            "cf_worker": cf_worker_client.get_status(),
+        },
     }

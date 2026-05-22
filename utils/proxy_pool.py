@@ -48,12 +48,11 @@ class ProxyPool:
         self._initialized = True
 
     def _load_proxies(self):
-        raw = os.getenv("PROXY_URLS", "").strip()
-        if not raw:
+        from utils.fetcher_config import get_proxy_urls
+        self._proxies = get_proxy_urls()
+        if not self._proxies:
             logger.info("Proxy pool: no proxies configured (direct connection)")
             return
-
-        self._proxies = [p.strip() for p in raw.split(",") if p.strip()]
         logger.info("Proxy pool: loaded %d proxies", len(self._proxies))
 
     def reload(self):
