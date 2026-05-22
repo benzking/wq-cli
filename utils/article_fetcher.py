@@ -43,15 +43,15 @@ class ArticleFallbackFetcher:
         from utils.fetcher_config import get_active_levels
 
         active = get_active_levels()
-        logger.info("[Fetch %s] url=%s levels=%s", tid, article_url[:60], "→".join(active))
+        logger.info("[Fetch %s] url=%s levels=%s timeout=%ds", tid, article_url[:60], "→".join(active), timeout)
 
         try:
             return await asyncio.wait_for(
                 self._do_fetch(article_url, tid, wechat_token, wechat_cookie),
-                timeout=FALLBACK_TOTAL_TIMEOUT,
+                timeout=min(timeout, FALLBACK_TOTAL_TIMEOUT),
             )
         except asyncio.TimeoutError:
-            logger.error("[Fetch %s] total timeout %ds exceeded", tid, FALLBACK_TOTAL_TIMEOUT)
+            logger.error("[Fetch %s] timeout %ds exceeded", tid, min(timeout, FALLBACK_TOTAL_TIMEOUT))
             return None
 
     async def _do_fetch(self, article_url: str, tid: str,
@@ -128,7 +128,10 @@ class ArticleFallbackFetcher:
                 })
             except Exception:
                 pass
-        asyncio.ensure_future(_notify())
+        try:
+            asyncio.create_task(_notify())
+        except RuntimeError:
+            pass  # No event loop running
 
 
 fallback_fetcher = ArticleFallbackFetcher()

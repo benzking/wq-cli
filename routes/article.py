@@ -138,6 +138,7 @@ async def get_article(article_request: ArticleRequest, request: Request):
         return {"success": True, "data": article_data}
 
     except Exception as e:
+        logger.error("[Article] unhandled error for %s: %s", article_request.url[:80], e, exc_info=True)
         error_str = str(e)
         if "timeout" in error_str.lower():
             return {"success": False, "error": "请求超时，请稍后重试"}
