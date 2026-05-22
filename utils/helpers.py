@@ -635,6 +635,8 @@ def has_article_content(html: str) -> bool:
     to avoid false positives on WeChat verification pages (~1.9MB) that contain
     "js_content" references in their JavaScript code.
     """
+    if not html or not isinstance(html, str):
+        return False
     element_markers = [
         'id="js_content"',
         'class="rich_media_content',

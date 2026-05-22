@@ -77,6 +77,9 @@ async def get_article(article_request: ArticleRequest, request: Request):
 
         html = await fallback_fetcher.fetch(article_request.url, timeout=60)
 
+        if not html:
+            return {"success": False, "error": "无法获取文章内容。可能原因：文章被删除、访问受限或需要验证。"}
+
         if not has_article_content(html):
             if "verify" in html or "验证" in html or "环境异常" in html:
                 await webhook.notify('verification_required', {
