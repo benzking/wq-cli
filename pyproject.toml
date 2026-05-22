@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wq-cli"
+version = "0.1.0"
+description = "WeChat Article Query CLI — Agent interface for wq-cli service"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+table = ["tabulate"]
+md = ["html2text"]
+all = ["tabulate", "html2text"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[project.scripts]
+wq = "cli:main"
