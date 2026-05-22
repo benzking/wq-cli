@@ -1,0 +1,82 @@
+{
+  "version": "0.1.0",
+  "commands": {
+    "check": {
+      "description": "Health + login status check",
+      "args": [],
+      "options": ["--auto-recover"],
+      "output": {"ok": "bool", "data": {"service_healthy": "bool", "authenticated": "bool", "is_expired": "bool"}}
+    },
+    "status": {
+      "description": "Auth status only (JSON alias for check)",
+      "args": [],
+      "output": {"ok": "bool", "data": "raw /api/admin/status response"}
+    },
+    "search": {
+      "description": "Search WeChat Official Accounts by name",
+      "args": ["<query: str>"],
+      "options": ["--format=json|table"],
+      "output": {"ok": "bool", "data": "[{fakeid, nickname, alias, round_head_img}]"}
+    },
+    "info": {
+      "description": "Get account detail (verify status, identity, original_count)",
+      "args": ["<fakeid: str>"],
+      "output": {"ok": "bool", "data": {"identity_name": "str", "is_verify": "int", "original_article_count": "int"}}
+    },
+    "subscribe": {
+      "description": "Add RSS subscription for a WeChat account",
+      "args": ["<fakeid: str>"],
+      "options": ["--nickname=str"],
+      "output": {"ok": "bool", "data": {"message": "str", "fakeid": "str"}}
+    },
+    "unsubscribe": {
+      "description": "Remove RSS subscription and cleanup cached articles",
+      "args": ["<fakeid: str>"],
+      "output": {"ok": "bool", "data": {"message": "str"}}
+    },
+    "subscriptions": {
+      "description": "List all RSS subscriptions with article counts and RSS URLs",
+      "options": ["--format=json|table"],
+      "output": {"ok": "bool", "data": "[{fakeid, nickname, article_count, rss_url, historical_count}]"}
+    },
+    "poll": {
+      "description": "Manually trigger full RSS poll for all subscriptions",
+      "output": {"ok": "bool", "data": {"message": "str"}}
+    },
+    "articles": {
+      "description": "Query cached articles from SQLite with API fallback (Level 4)",
+      "options": ["--hours=N", "--keyword=K", "--fakeid=F", "--limit=N", "--format=json|table"],
+      "output": {"ok": "bool", "data": "[{id, nickname, title, link, digest, publish_time_str}]"}
+    },
+    "fetch": {
+      "description": "Fetch single article full content with format options",
+      "args": ["<url: str>"],
+      "options": ["--format=json|md|mhtml", "--outdir=PATH"],
+      "output_json": {"ok": "bool", "data": {"title": "str", "content": "str", "plain_content": "str", "images": "[str]"}},
+      "output_md": "article.md + images/ directory with local image references",
+      "output_mhtml": "article.mhtml single-file offline archive with base64 inline images"
+    },
+    "push-report": {
+      "description": "Generate JSON push report of recent articles + login status",
+      "options": ["--hours=N"],
+      "output": {"ok": "bool", "data": {"period_hours": "int", "article_count": "int", "articles": "[...]", "login": {"authenticated": "bool"}}}
+    },
+    "md-push": {
+      "description": "Generate Markdown push report (non-JSON, for cron direct delivery)",
+      "options": ["--hours=N"],
+      "output": "Pure Markdown text (⚠️ NOT JSON, differs from all other commands)"
+    },
+    "login": {
+      "description": "Show login page URL and current authentication status",
+      "output": "Plain text with http://localhost:5000/login.html URL"
+    },
+    "cron-setup": {
+      "description": "Print cron registration guide for both Hermes and OpenCLI",
+      "output": "Plain text with crontab syntax examples"
+    },
+    "version": {
+      "description": "Show wq-cli version",
+      "output": "Plain text 'wq-cli v0.1.0'"
+    }
+  }
+}

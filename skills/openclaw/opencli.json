@@ -1,0 +1,24 @@
+{
+  "name": "wq",
+  "version": "0.1.0",
+  "description": "WeChat Official Account article query and RSS subscription CLI",
+  "entry": "wq",
+  "fallback_entry": "/home/gly/wq-cli/wq.sh",
+  "commands": {
+    "check":          {"description": "Health + login status check", "options": ["--auto-recover"]},
+    "status":         {"description": "Auth status only (JSON)"},
+    "search":         {"description": "Search WeChat accounts", "args": ["<query>"], "options": ["--format=json|table"]},
+    "info":           {"description": "Account detail", "args": ["<fakeid>"]},
+    "subscribe":      {"description": "Add RSS subscription", "args": ["<fakeid>"], "options": ["--nickname"]},
+    "unsubscribe":    {"description": "Remove subscription", "args": ["<fakeid>"]},
+    "subscriptions":  {"description": "List subscriptions", "options": ["--format=json|table"]},
+    "poll":           {"description": "Trigger RSS poll"},
+    "articles":       {"description": "Query cached articles", "options": ["--hours", "--keyword", "--fakeid", "--limit", "--format"]},
+    "fetch":          {"description": "Fetch article full content", "args": ["<url>"], "options": ["--format=json|md|mhtml", "--outdir"]},
+    "push-report":    {"description": "Push report JSON", "options": ["--hours"]},
+    "md-push":        {"description": "Push report Markdown (non-JSON output!)", "options": ["--hours"]},
+    "login":          {"description": "Show login page URL"},
+    "cron-setup":     {"description": "Print cron registration guide"},
+    "version":        {"description": "Show version"}
+  }
+}
