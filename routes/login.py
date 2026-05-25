@@ -227,9 +227,12 @@ async def get_qrcode(request: Request):
         ext = "png" if is_png else "jpg"
         qrcode_path = f"{qrcode_dir}/login_qrcode.{ext}"
         
-        with open(qrcode_path, "wb") as f:
-            f.write(content)
-        print(f"[SAVE] 二维码已保存到: {qrcode_path}")
+        try:
+            with open(qrcode_path, "wb") as f:
+                f.write(content)
+            print(f"[SAVE] 二维码已保存到: {qrcode_path}")
+        except (PermissionError, OSError) as e:
+            print(f"[WARN] 无法保存二维码到本地（权限不足或目录不存在）: {e}")
         
         # 构建响应,转发Set-Cookie
         response_obj = Response(
