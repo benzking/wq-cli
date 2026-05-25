@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文章浏览 - WeChat Download API</title>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --success-color: #52c41a;
+            --warning-color: #fa8c16;
+            --error-color: #ff4d4f;
+            --text-primary: #262626;
+            --text-secondary: #595959;
+            --text-muted: #8c8c8c;
+            --bg-primary: #ffffff;
+            --bg-secondary: #fafafa;
+            --bg-hover: #f5f5f5;
+            --border-light: #f0f0f0;
+            --border-base: #d9d9d9;
+            --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.06);
+            --shadow-base: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --shadow-heavy: 0 8px 24px rgba(0, 0, 0, 0.12);
+            --radius-small: 4px;
+            --radius-base: 8px;
+            --radius-large: 12px;
+            --font-xs: 12px;
+            --font-sm: 14px;
+            --font-base: 16px;
+            --font-lg: 20px;
+            --font-xl: 24px;
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            --duration-fast: 200ms;
+            --duration-normal: 300ms;
+            --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .layout {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: var(--space-xl) var(--space-lg);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-lg);
+        }
+
+        .header-left h1 {
+            font-size: var(--font-xl);
+            font-weight: 700;
+        }
+
+        .header-left p {
+            font-size: var(--font-sm);
+            color: var(--text-secondary);
+            margin-top: var(--space-xs);
+        }
+
+        .header-actions { display: flex; gap: var(--space-sm); }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            padding: var(--space-sm) var(--space-md);
+            border: 1px solid var(--border-base);
+            border-radius: var(--radius-small);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: var(--font-sm);
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-in-out);
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
+        .btn-primary { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+        .btn-primary:hover { opacity: 0.85; color: #fff; }
+        .btn-sm { padding: var(--space-xs) var(--space-sm); font-size: var(--font-xs); }
+
+        .toolbar {
+            display: flex;
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-box {
+            display: flex;
+            flex: 1;
+            min-width: 200px;
+            max-width: 360px;
+        }
+        .search-box input {
+            flex: 1;
+            padding: var(--space-sm) var(--space-md);
+            border: 1px solid var(--border-base);
+            border-radius: var(--radius-small) 0 0 var(--radius-small);
+            font-size: var(--font-sm);
+            outline: none;
+            transition: border-color var(--duration-fast);
+        }
+        .search-box input:focus { border-color: var(--primary-color); }
+        .search-box button {
+            padding: var(--space-sm) var(--space-md);
+            border: 1px solid var(--primary-color);
+            border-left: none;
+            border-radius: 0 var(--radius-small) var(--radius-small) 0;
+            background: var(--primary-color);
+            color: #fff;
+            font-size: var(--font-sm);
+            cursor: pointer;
+        }
+
+        .filter-select {
+            padding: var(--space-sm) var(--space-md);
+            border: 1px solid var(--border-base);
+            border-radius: var(--radius-small);
+            font-size: var(--font-sm);
+            outline: none;
+            background: var(--bg-primary);
+            cursor: pointer;
+            min-width: 160px;
+        }
+        .filter-select:focus { border-color: var(--primary-color); }
+
+        .stats-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-md);
+            font-size: var(--font-sm);
+            color: var(--text-secondary);
+        }
+
+        .article-list { display: flex; flex-direction: column; gap: var(--space-md); }
+
+        .article-card {
+            display: flex;
+            gap: var(--space-md);
+            background: var(--bg-primary);
+            border-radius: var(--radius-base);
+            box-shadow: var(--shadow-light);
+            padding: var(--space-md);
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-in-out);
+            border: 1px solid transparent;
+        }
+        .article-card:hover {
+            box-shadow: var(--shadow-base);
+            border-color: var(--primary-color);
+        }
+
+        .article-cover {
+            width: 120px;
+            height: 80px;
+            border-radius: var(--radius-small);
+            object-fit: cover;
+            flex-shrink: 0;
+            background: var(--border-light);
+        }
+
+        .article-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+        .article-title {
+            font-size: var(--font-base);
+            font-weight: 600;
+            line-height: 1.4;
+            margin-bottom: var(--space-xs);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .article-digest {
+            font-size: var(--font-sm);
+            color: var(--text-secondary);
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            flex: 1;
+        }
+
+        .article-meta {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            margin-top: var(--space-sm);
+            font-size: var(--font-xs);
+            color: var(--text-muted);
+            flex-wrap: wrap;
+        }
+        .article-meta .source {
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .article-meta .source-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 1px 6px;
+            border-radius: 2px;
+            font-size: 11px;
+        }
+        .badge-source { background: #e6f7ff; color: #1890ff; }
+        .badge-historical { background: #fff7e6; color: #fa8c16; }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-xl) * 3;
+            color: var(--text-muted);
+        }
+        .empty-state svg { width: 64px; height: 64px; margin-bottom: var(--space-md); opacity: 0.3; }
+        .empty-state p { margin-top: var(--space-sm); font-size: var(--font-sm); }
+
+        .spinner {
+            display: none;
+            width: 32px; height: 32px;
+            border: 3px solid var(--border-light);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: var(--space-xl) auto;
+        }
+        .spinner.show { display: block; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-sm);
+            margin-top: var(--space-lg);
+        }
+        .pagination span {
+            color: var(--text-secondary);
+            font-size: var(--font-sm);
+        }
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Modal overlay */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+
+        .modal {
+            background: var(--bg-primary);
+            border-radius: var(--radius-large);
+            box-shadow: var(--shadow-heavy);
+            width: 90vw;
+            max-width: 800px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-md) var(--space-lg);
+            border-bottom: 1px solid var(--border-light);
+        }
+        .modal-header h2 {
+            font-size: var(--font-lg);
+            flex: 1;
+            margin-right: var(--space-md);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .modal-close {
+            width: 32px; height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: none;
+            font-size: var(--font-lg);
+            cursor: pointer;
+            color: var(--text-muted);
+            border-radius: var(--radius-small);
+            flex-shrink: 0;
+        }
+        .modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+        .modal-meta {
+            display: flex;
+            gap: var(--space-md);
+            padding: var(--space-sm) var(--space-lg);
+            border-bottom: 1px solid var(--border-light);
+            font-size: var(--font-sm);
+            color: var(--text-muted);
+            flex-wrap: wrap;
+        }
+
+        .modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--space-lg);
+        }
+        .modal-body img { max-width: 100%; height: auto; border-radius: var(--radius-small); }
+        .modal-body p { margin-bottom: var(--space-md); line-height: 1.8; }
+        .modal-body h1, .modal-body h2, .modal-body h3 { margin: var(--space-md) 0 var(--space-sm); }
+
+        .modal-actions {
+            display: flex;
+            gap: var(--space-sm);
+            padding: var(--space-md) var(--space-lg);
+            border-top: 1px solid var(--border-light);
+        }
+
+        @media (max-width: 640px) {
+            .layout { padding: var(--space-md); }
+            .article-card { flex-direction: column; }
+            .article-cover { width: 100%; height: 160px; }
+            .toolbar { flex-direction: column; }
+            .search-box { max-width: 100%; }
+            .modal { width: 95vw; max-height: 90vh; }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <div class="header">
+            <div class="header-left">
+                <h1>文章浏览</h1>
+                <p>已订阅公众号的文章在线查看</p>
+            </div>
+            <div class="header-actions">
+                <a href="/static/rss.html" class="btn">RSS 管理</a>
+                <a href="/static/admin.html" class="btn">管理面板</a>
+                <a href="/api/docs" class="btn">API 文档</a>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="搜索标题或摘要..." onkeydown="if(event.key==='Enter')searchArticles()">
+                <button onclick="searchArticles()">搜索</button>
+            </div>
+            <select class="filter-select" id="fakeidFilter" onchange="filterChanged()">
+                <option value="">全部公众号</option>
+            </select>
+        </div>
+
+        <div class="stats-bar">
+            <span id="statsInfo">加载中...</span>
+        </div>
+
+        <div class="article-list" id="articleList"></div>
+
+        <div class="spinner" id="spinner"></div>
+
+        <div class="pagination" id="pagination"></div>
+    </div>
+
+    <div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modalTitle"></h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-meta" id="modalMeta"></div>
+            <div class="modal-body" id="modalBody">
+                <div class="spinner show" id="modalSpinner"></div>
+            </div>
+            <div class="modal-actions">
+                <a href="#" id="modalLink" target="_blank" class="btn btn-primary btn-sm">原文链接</a>
+                <button class="btn btn-sm" onclick="closeModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/browse';
+        let currentPage = 1;
+        let currentFakeid = '';
+        let currentKeyword = '';
+
+        async function init() {
+            await loadSubscriptions();
+            await loadArticles();
+        }
+
+        async function loadSubscriptions() {
+            try {
+                const res = await fetch(`${API}/subscriptions`);
+                const json = await res.json();
+                if (!json.success) return;
+                const sel = document.getElementById('fakeidFilter');
+                json.data.subscriptions.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.fakeid;
+                    opt.textContent = `${s.nickname || s.fakeid} (${s.article_count})`;
+                    sel.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Failed to load subscriptions', e);
+            }
+        }
+
+        async function loadArticles() {
+            const list = document.getElementById('articleList');
+            const spinner = document.getElementById('spinner');
+            const stats = document.getElementById('statsInfo');
+            const pag = document.getElementById('pagination');
+
+            spinner.classList.add('show');
+            list.innerHTML = '';
+
+            try {
+                const params = new URLSearchParams({
+                    page: currentPage,
+                    per_page: 20,
+                });
+                if (currentFakeid) params.set('fakeid', currentFakeid);
+                if (currentKeyword) params.set('keyword', currentKeyword);
+
+                const res = await fetch(`${API}/articles?${params}`);
+                const json = await res.json();
+
+                if (!json.success) {
+                    list.innerHTML = `<div class="empty-state"><p>${json.error || '加载失败'}</p></div>`;
+                    return;
+                }
+
+                const { articles, total, page, per_page, total_pages } = json.data;
+
+                stats.textContent = `共 ${total} 篇文章`;
+                if (total_pages > 0) {
+                    stats.textContent += ` · 第 ${page}/${total_pages} 页`;
+                }
+
+                if (articles.length === 0) {
+                    list.innerHTML = `<div class="empty-state"><p>📭 暂无文章</p><p style="font-size:13px;margin-top:4px;">订阅公众号后有文章被抓取后会显示在这里</p></div>`;
+                    pag.innerHTML = '';
+                    return;
+                }
+
+                renderArticles(articles);
+                renderPagination(page, total_pages);
+            } catch (e) {
+                list.innerHTML = `<div class="empty-state"><p>加载出错: ${e.message}</p></div>`;
+            } finally {
+                spinner.classList.remove('show');
+            }
+        }
+
+        function renderArticles(articles) {
+            const list = document.getElementById('articleList');
+            const timeFmt = ts => {
+                if (!ts) return '';
+                const d = new Date(ts * 1000);
+                return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            };
+
+            list.innerHTML = articles.map(a => {
+                const sourceLabel = a.source === 'deep_fetch' ? '历史' : '';
+                const badgeClass = a.source === 'deep_fetch' ? 'badge-historical' : 'badge-source';
+                return `
+                <div class="article-card" onclick="openArticle(${a.id})">
+                    ${a.cover ? `<img class="article-cover" src="${escHtml(a.cover)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+                    <div class="article-body">
+                        <div class="article-title">${escHtml(a.title || '(无标题)')}</div>
+                        <div class="article-digest">${escHtml(a.digest || '')}</div>
+                        <div class="article-meta">
+                            <span class="source">${escHtml(a.nickname || a.fakeid)}</span>
+                            ${sourceLabel ? `<span class="source-tag ${badgeClass}">${sourceLabel}</span>` : ''}
+                            <span>${escHtml(a.author || '')}</span>
+                            <span>${timeFmt(a.publish_time)}</span>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderPagination(page, totalPages) {
+            const pag = document.getElementById('pagination');
+            if (totalPages <= 1) { pag.innerHTML = ''; return; }
+
+            let html = `<button class="btn btn-sm" onclick="goPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>‹ 上一页</button>`;
+            html += `<span>${page} / ${totalPages}</span>`;
+            html += `<button class="btn btn-sm" onclick="goPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>下一页 ›</button>`;
+            pag.innerHTML = html;
+        }
+
+        function goPage(p) { currentPage = p; loadArticles(); window.scrollTo(0, 0); }
+
+        function searchArticles() {
+            currentKeyword = document.getElementById('searchInput').value.trim();
+            currentPage = 1;
+            loadArticles();
+        }
+
+        function filterChanged() {
+            currentFakeid = document.getElementById('fakeidFilter').value;
+            currentPage = 1;
+            loadArticles();
+        }
+
+        async function openArticle(id) {
+            const overlay = document.getElementById('modalOverlay');
+            const body = document.getElementById('modalBody');
+            const spinner = document.getElementById('modalSpinner');
+            const link = document.getElementById('modalLink');
+
+            overlay.classList.add('show');
+            document.body.style.overflow = 'hidden';
+            body.innerHTML = '';
+            spinner.classList.add('show');
+            document.getElementById('modalTitle').textContent = '加载中...';
+            document.getElementById('modalMeta').innerHTML = '';
+            link.href = '#';
+
+            try {
+                const res = await fetch(`${API}/article/${id}`);
+                const json = await res.json();
+                if (!json.success) {
+                    body.innerHTML = `<div class="empty-state"><p>${json.error}</p></div>`;
+                    return;
+                }
+
+                const a = json.data.article;
+                const timeFmt = ts => {
+                    if (!ts) return '';
+                    const d = new Date(ts * 1000);
+                    return d.toLocaleString('zh-CN');
+                };
+
+                document.getElementById('modalTitle').textContent = a.title || '(无标题)';
+                document.getElementById('modalMeta').innerHTML = `
+                    <span>${escHtml(a.nickname || a.fakeid)}</span>
+                    <span>${escHtml(a.author || '')}</span>
+                    <span>${timeFmt(a.publish_time)}</span>
+                    ${a.source === 'deep_fetch' ? '<span style="color:#fa8c16">历史文章</span>' : ''}
+                `;
+                link.href = a.link || '#';
+
+                if (a.content) {
+                    body.innerHTML = a.content;
+                } else {
+                    body.innerHTML = `<p style="color:var(--text-muted)">文章内容未抓取，<a href="${escHtml(a.link)}" target="_blank">点击查看原文</a></p>`;
+                }
+            } catch (e) {
+                body.innerHTML = `<div class="empty-state"><p>加载出错: ${e.message}</p></div>`;
+            } finally {
+                spinner.classList.remove('show');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        function escHtml(s) {
+            if (!s) return '';
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        init();
+    </script>
+</body>
+</html>

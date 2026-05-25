@@ -21,6 +21,7 @@ import httpx
 from utils.auth_manager import auth_manager
 from utils import rss_store
 from utils.helpers import extract_article_info, parse_article_url, is_image_text_message, has_article_content, is_article_unavailable, get_unavailable_reason
+from utils.ingestion_store import log_ingestion_result, init_ingestion_table
 from utils.http_client import fetch_page
 
 logger = logging.getLogger(__name__)
@@ -130,6 +131,16 @@ class RSSPoller:
                     new_count = rss_store.save_articles(fakeid, articles, source='poll')
                     if new_count > 0:
                         logger.info("RSS: %d new articles for %s", new_count, fakeid[:8])
+                    # 记录入库结果
+                    for a in articles:
+                        link = a.get("link", "")
+                        content = a.get("content", "")
+                        success = bool(content and content.strip())
+                        log_ingestion_result(
+                            fakeid, link, success,
+                            error_msg="" if success else "empty content",
+                            channel="poll",
+                        )
                 rss_store.update_last_poll(fakeid)
             except WechatInvalidFakeidError as e:
                 # [2026-05-18] 同步 SaaS 修复：fakeid 在微信侧已失效，自动加入黑名单

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统日志 - WeChat Download API</title>
+    <style>
+        :root {
+            --primary-color: #1890ff;
+            --success-color: #52c41a;
+            --warning-color: #fa8c16;
+            --error-color: #ff4d4f;
+            --text-primary: #262626;
+            --text-secondary: #595959;
+            --text-muted: #8c8c8c;
+            --bg-primary: #ffffff;
+            --bg-secondary: #fafafa;
+            --bg-hover: #f5f5f5;
+            --border-light: #f0f0f0;
+            --border-base: #d9d9d9;
+            --shadow-light: 0 2px 8px rgba(0,0,0,0.06);
+            --shadow-base: 0 4px 12px rgba(0,0,0,0.08);
+            --radius-small: 4px;
+            --radius-base: 8px;
+            --radius-large: 12px;
+            --font-xs: 12px;
+            --font-sm: 14px;
+            --font-base: 16px;
+            --font-lg: 20px;
+            --font-xl: 24px;
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            --duration-fast: 200ms;
+            --ease-in-out: cubic-bezier(0.4,0,0.2,1);
+        }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg-secondary);color:var(--text-primary);min-height:100vh}
+        .layout{max-width:1200px;margin:0 auto;padding:var(--space-xl) var(--space-lg)}
+        .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-lg)}
+        .header-left h1{font-size:var(--font-xl);font-weight:700}
+        .header-left p{font-size:var(--font-sm);color:var(--text-secondary);margin-top:var(--space-xs)}
+        .header-actions{display:flex;gap:var(--space-sm)}
+        .btn{display:inline-flex;align-items:center;gap:var(--space-xs);padding:var(--space-sm) var(--space-md);border:1px solid var(--border-base);border-radius:var(--radius-small);background:var(--bg-primary);color:var(--text-primary);font-size:var(--font-sm);cursor:pointer;transition:all var(--duration-fast) var(--ease-in-out);text-decoration:none;white-space:nowrap}
+        .btn:hover{border-color:var(--primary-color);color:var(--primary-color)}
+        .btn-primary{background:var(--primary-color);color:#fff;border-color:var(--primary-color)}
+        .btn-primary:hover{opacity:0.85;color:#fff}
+        .btn-danger{color:var(--error-color);border-color:var(--error-color)}
+        .btn-danger:hover{background:var(--error-color);color:#fff}
+        .btn-sm{padding:var(--space-xs) var(--space-sm);font-size:var(--font-xs)}
+        .toolbar{display:flex;gap:var(--space-md);margin-bottom:var(--space-md);flex-wrap:wrap;align-items:center}
+        .search-input{flex:1;min-width:160px;max-width:280px;padding:var(--space-sm) var(--space-md);border:1px solid var(--border-base);border-radius:var(--radius-small);font-size:var(--font-sm);outline:none}
+        .search-input:focus{border-color:var(--primary-color)}
+        .filter-select{padding:var(--space-sm) var(--space-md);border:1px solid var(--border-base);border-radius:var(--radius-small);font-size:var(--font-sm);outline:none;background:var(--bg-primary);cursor:pointer;min-width:130px}
+        .filter-select:focus{border-color:var(--primary-color)}
+        .stats-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-md);font-size:var(--font-sm);color:var(--text-secondary)}
+        .auto-refresh{display:flex;align-items:center;gap:var(--space-xs);font-size:var(--font-xs)}
+        .log-table{width:100%;background:var(--bg-primary);border-radius:var(--radius-base);box-shadow:var(--shadow-light);overflow:hidden}
+        .log-table table{width:100%;border-collapse:collapse}
+        .log-table th{padding:var(--space-sm) var(--space-md);text-align:left;font-size:var(--font-xs);font-weight:600;color:var(--text-muted);border-bottom:2px solid var(--border-light);background:var(--bg-secondary);text-transform:uppercase}
+        .log-table td{padding:var(--space-sm) var(--space-md);font-size:var(--font-xs);border-bottom:1px solid var(--border-light);vertical-align:top}
+        .log-table tr:hover{background:var(--bg-hover)}
+        .log-level{display:inline-flex;padding:1px 6px;border-radius:2px;font-weight:600;font-size:11px;text-transform:uppercase}
+        .level-INFO{background:#e6f7ff;color:#1890ff}.level-WARNING{background:#fff7e6;color:#fa8c16}
+        .level-ERROR{background:#fff2f0;color:#ff4d4f}.level-DEBUG{background:#f6ffed;color:#52c41a}
+        .log-module{color:var(--primary-color);font-weight:500;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .log-message{max-width:500px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .log-time{white-space:nowrap;color:var(--text-muted)}
+        .log-detail{color:var(--text-muted);font-size:11px;word-break:break-all;margin-top:2px}
+        .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px;color:var(--text-muted)}
+        .empty-state p{margin-top:var(--space-sm);font-size:var(--font-sm)}
+        .spinner{display:none;width:32px;height:32px;border:3px solid var(--border-light);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;margin:var(--space-xl) auto}
+        .spinner.show{display:block}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .pagination{display:flex;align-items:center;justify-content:center;gap:var(--space-sm);margin-top:var(--space-lg)}
+        .pagination span{color:var(--text-secondary);font-size:var(--font-sm)}
+        .pagination button:disabled{opacity:0.4;cursor:not-allowed}
+        .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center}
+        .modal-overlay.show{display:flex}
+        .modal{background:var(--bg-primary);border-radius:var(--radius-large);box-shadow:0 8px 24px rgba(0,0,0,0.12);width:90vw;max-width:700px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+        .modal-header{display:flex;align-items:center;justify-content:space-between;padding:var(--space-md) var(--space-lg);border-bottom:1px solid var(--border-light)}
+        .modal-header h3{font-size:var(--font-base);flex:1;margin-right:var(--space-md)}
+        .modal-close{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:none;font-size:var(--font-lg);cursor:pointer;color:var(--text-muted);border-radius:var(--radius-small)}
+        .modal-close:hover{background:var(--bg-hover);color:var(--text-primary)}
+        .modal-body{flex:1;overflow-y:auto;padding:var(--space-lg)}
+        .modal-body pre{white-space:pre-wrap;word-break:break-all;font-size:var(--font-sm);line-height:1.6;font-family:inherit}
+        .modal-body .detail-row{display:flex;gap:var(--space-sm);margin-bottom:var(--space-sm)}
+        .modal-body .detail-label{color:var(--text-muted);min-width:60px;flex-shrink:0}
+        .modal-body .detail-value{flex:1;word-break:break-all}
+        .cleanup-section{display:flex;align-items:center;gap:var(--space-sm)}
+        .cleanup-section select{padding:2px 6px;font-size:var(--font-xs);border:1px solid var(--border-base);border-radius:var(--radius-small);background:var(--bg-primary)}
+        .date-input{padding:var(--space-sm) var(--space-md);border:1px solid var(--border-base);border-radius:var(--radius-small);font-size:var(--font-sm);outline:none;background:var(--bg-primary);cursor:pointer;min-width:140px}
+        .date-input:focus{border-color:var(--primary-color)}
+        .date-sep{font-size:var(--font-sm);color:var(--text-muted)}
+        @media(max-width:640px){.layout{padding:var(--space-md)}.toolbar{flex-direction:column}.search-input{max-width:100%}.date-input{min-width:120px}.log-table{overflow-x:auto}.log-message{max-width:200px}}
+    </style>
+</head>
+<body>
+<div class="layout">
+    <div class="header">
+        <div class="header-left">
+            <h1>系统日志</h1>
+            <p>全平台运行日志查看与检索</p>
+        </div>
+        <div class="header-actions">
+            <a href="/static/browse.html" class="btn">文章浏览</a>
+            <a href="/static/admin.html" class="btn">管理面板</a>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <select class="filter-select" id="levelFilter" onchange="reloadLogs()">
+            <option value="">全部级别</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+            <option value="DEBUG">DEBUG</option>
+        </select>
+        <select class="filter-select" id="moduleFilter" onchange="reloadLogs()">
+            <option value="">全部模块</option>
+        </select>
+        <input class="date-input" type="date" id="dateFrom" onchange="reloadLogs()" title="开始日期">
+        <span class="date-sep">至</span>
+        <input class="date-input" type="date" id="dateTo" onchange="reloadLogs()" title="结束日期">
+        <input class="search-input" placeholder="搜索内容..." id="keywordInput" onkeydown="if(event.key==='Enter')reloadLogs()">
+        <button class="btn btn-sm" onclick="reloadLogs()">查询</button>
+        <button class="btn btn-sm" onclick="resetFilters()">重置</button>
+        <div class="cleanup-section">
+            <span style="font-size:var(--font-xs);color:var(--text-muted)">定期清理</span>
+            <select id="retainDays">
+                <option value="3">3天</option><option value="7" selected>7天</option><option value="14">14天</option><option value="30">30天</option>
+            </select>
+            <button class="btn btn-danger btn-sm" onclick="cleanupLogs()">清理旧日志</button>
+        </div>
+    </div>
+
+    <div class="stats-bar">
+        <span id="statsInfo">加载中...</span>
+        <div class="auto-refresh">
+            <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
+            <label for="autoRefresh">自动刷新(10s)</label>
+        </div>
+    </div>
+
+    <div class="log-table">
+        <table>
+            <thead><tr><th style="width:60px">级别</th><th style="width:110px">时间</th><th style="width:130px">模块</th><th>内容</th></tr></thead>
+            <tbody id="logBody"></tbody>
+        </table>
+    </div>
+
+    <div class="spinner" id="spinner"></div>
+    <div class="pagination" id="pagination"></div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="modalTitle">日志详情</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+    </div>
+</div>
+
+<script>
+const API = '/api/admin/logs';
+let currentPage = 1;
+let refreshTimer = null;
+
+async function loadModules() {
+    try {
+        const res = await fetch(`${API}/modules`);
+        const json = await res.json();
+        if (!json.success) return;
+        const sel = document.getElementById('moduleFilter');
+        json.data.modules.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            sel.appendChild(opt);
+        });
+    } catch (e) { console.error('Failed to load modules', e); }
+}
+
+async function loadLogs() {
+    const spinner = document.getElementById('spinner');
+    const body = document.getElementById('logBody');
+    const stats = document.getElementById('statsInfo');
+    const pag = document.getElementById('pagination');
+
+    spinner.classList.add('show');
+    body.innerHTML = '';
+
+    try {
+        const params = new URLSearchParams({page: currentPage, per_page: 50});
+        const level = document.getElementById('levelFilter').value;
+        const module = document.getElementById('moduleFilter').value;
+        const keyword = document.getElementById('keywordInput').value.trim();
+        const dateFrom = document.getElementById('dateFrom').value;
+        const dateTo = document.getElementById('dateTo').value;
+        if (level) params.set('level', level);
+        if (module) params.set('module', module);
+        if (keyword) params.set('keyword', keyword);
+        if (dateFrom) params.set('since', String(new Date(dateFrom + 'T00:00:00').getTime() / 1000));
+        if (dateTo) params.set('until', String(new Date(dateTo + 'T23:59:59').getTime() / 1000));
+
+        const res = await fetch(`${API}?${params}`);
+        const json = await res.json();
+        if (!json.success) { body.innerHTML = '<tr><td colspan="4" class="empty-state"><p>加载失败</p></td></tr>'; return; }
+
+        const { logs, total, page, total_pages } = json.data;
+        stats.textContent = `共 ${total} 条日志` + (total_pages ? ` · 第 ${page}/${total_pages} 页` : '');
+
+        if (!logs.length) {
+            body.innerHTML = '<tr><td colspan="4"><div class="empty-state"><p>暂无日志</p><p style="font-size:13px">系统启动后开始记录</p></div></td></tr>';
+            pag.innerHTML = ''; return;
+        }
+
+        body.innerHTML = logs.map(l => `<tr onclick="showDetail(${l.id})" style="cursor:pointer" title="点击查看详情">
+            <td><span class="log-level level-${l.level}">${l.level}</span></td>
+            <td class="log-time">${new Date(l.timestamp*1000).toLocaleString('zh-CN')}</td>
+            <td class="log-module">${escHtml(l.module)}</td>
+            <td class="log-message">${escHtml(l.message)}</td>
+        </tr>`).join('');
+
+        renderPagination(page, total_pages);
+    } catch (e) {
+        body.innerHTML = '<tr><td colspan="4"><div class="empty-state"><p>加载出错: ' + e.message + '</p></div></td></tr>';
+    } finally {
+        spinner.classList.remove('show');
+    }
+}
+
+function renderPagination(page, totalPages) {
+    const pag = document.getElementById('pagination');
+    if (totalPages <= 1) { pag.innerHTML = ''; return; }
+    let html = `<button class="btn btn-sm" onclick="goPage(${page-1})" ${page<=1?'disabled':''}>‹ 上一页</button>`;
+    html += `<span>${page} / ${totalPages}</span>`;
+    html += `<button class="btn btn-sm" onclick="goPage(${page+1})" ${page>=totalPages?'disabled':''}>下一页 ›</button>`;
+    pag.innerHTML = html;
+}
+
+function goPage(p) { currentPage = p; loadLogs(); window.scrollTo(0, 0); }
+function reloadLogs() { currentPage = 1; loadLogs(); }
+function resetFilters() {
+    document.getElementById('levelFilter').value = '';
+    document.getElementById('moduleFilter').value = '';
+    document.getElementById('keywordInput').value = '';
+    document.getElementById('dateFrom').value = '';
+    document.getElementById('dateTo').value = '';
+    reloadLogs();
+}
+
+function showDetail(id) {
+    document.getElementById('modalTitle').textContent = '日志详情 #' + id;
+    fetch(`${API}?per_page=200`).then(r=>r.json()).then(json=>{
+        if(json.success){
+            const log = json.data.logs.find(l=>l.id===id);
+            if(log){
+                document.getElementById('modalBody').innerHTML = `
+                    <div class="detail-row"><span class="detail-label">级别:</span><span class="detail-value"><span class="log-level level-${log.level}">${log.level}</span></span></div>
+                    <div class="detail-row"><span class="detail-label">时间:</span><span class="detail-value">${new Date(log.timestamp*1000).toLocaleString('zh-CN')}</span></div>
+                    <div class="detail-row"><span class="detail-label">模块:</span><span class="detail-value">${escHtml(log.module)}</span></div>
+                    <div class="detail-row"><span class="detail-label">内容:</span><span class="detail-value"><pre>${escHtml(log.message)}</pre></span></div>
+                `;
+            }
+        }
+    });
+    document.getElementById('modalOverlay').classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeModal() { document.getElementById('modalOverlay').classList.remove('show'); document.body.style.overflow = ''; }
+function escHtml(s) { if(!s) return ''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function toggleAutoRefresh() {
+    if (document.getElementById('autoRefresh').checked) {
+        refreshTimer = setInterval(loadLogs, 10000);
+    } else {
+        clearInterval(refreshTimer);
+    }
+}
+
+async function cleanupLogs() {
+    const days = document.getElementById('retainDays').value;
+    if (!confirm(`确定删除 ${days} 天前的所有日志吗?`)) return;
+    const res = await fetch(`/api/admin/logs/cleanup?retain_days=${days}`, {method:'POST'});
+    const json = await res.json();
+    if (json.success) loadLogs();
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+loadModules();
+loadLogs();
+</script>
+</body>
+</html>

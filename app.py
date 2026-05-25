@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import logging
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
@@ -21,9 +22,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
 # 导入路由
-from routes import article, articles, search, admin, login, image, health, stats, rss, account
+from routes import article, articles, search, admin, login, image, health, stats, rss, account, browse, logs, ingestion, backup
 from utils.rss_store import init_db
 from utils.rss_poller import rss_poller
+from utils.system_logger import init_system_logs_table, SQLiteLogHandler
+from utils.ingestion_store import init_ingestion_table
+
+
+def _setup_logging():
+    fmt = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    root = logging.getLogger()
+    # 防止 debug 模式下 uvicorn reload 时重复添加 handler
+    for h in root.handlers:
+        if isinstance(h, SQLiteLogHandler):
+            return
+    handler = SQLiteLogHandler()
+    handler.setFormatter(fmt)
+    handler.setLevel(logging.DEBUG)
+    root.setLevel(logging.DEBUG)
+    root.addHandler(handler)
 
 API_DESCRIPTION = """
 微信公众号文章下载 API，支持文章解析、公众号搜索、文章列表获取等功能。
@@ -58,6 +78,12 @@ async def lifespan(app: FastAPI):
         print("=" * 60 + "\n")
 
     init_db()
+    init_system_logs_table()
+    init_ingestion_table()
+
+    # 将 Python logging 接入 SQLite 日志存储
+    _setup_logging()
+
     await rss_poller.start()
 
     # 启动 CF Worker 客户端（后台健康探测）
@@ -109,6 +135,10 @@ app.include_router(admin.router, prefix="/api/admin", tags=["管理"])
 app.include_router(login.router, prefix="/api/login", tags=["登录"])
 app.include_router(image.router, prefix="/api", tags=["图片代理"])
 app.include_router(rss.router, prefix="/api", tags=["RSS 订阅"])
+app.include_router(browse.router, prefix="/api", tags=["文章浏览"])
+app.include_router(logs.router, prefix="/api", tags=["系统日志"])
+app.include_router(ingestion.router, prefix="/api", tags=["入库管理"])
+app.include_router(backup.router, prefix="/api", tags=["备份管理"])
 
 # 静态文件
 static_dir = Path(__file__).parent / "static"
@@ -175,6 +205,26 @@ async def history_page():
 async def proxy_config_page():
     """回落节点配置页面"""
     return FileResponse(static_dir / "proxy-config.html")
+
+@app.get("/browse.html", include_in_schema=False)
+async def browse_page():
+    """文章浏览页面"""
+    return FileResponse(static_dir / "browse.html")
+
+@app.get("/logs.html", include_in_schema=False)
+async def logs_page():
+    """系统日志页面"""
+    return FileResponse(static_dir / "logs.html")
+
+@app.get("/ingestion.html", include_in_schema=False)
+async def ingestion_page():
+    """入库管理页面"""
+    return FileResponse(static_dir / "ingestion.html")
+
+@app.get("/backup.html", include_in_schema=False)
+async def backup_page():
+    """备份管理页面"""
+    return FileResponse(static_dir / "backup.html")
 
 if __name__ == "__main__":
     import os

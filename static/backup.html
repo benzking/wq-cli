@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>备份管理 - WeChat Download API</title>
+    <style>
+        :root{--primary-color:#1890ff;--success-color:#52c41a;--warning-color:#fa8c16;--error-color:#ff4d4f;--text-primary:#262626;--text-secondary:#595959;--text-muted:#8c8c8c;--bg-primary:#ffffff;--bg-secondary:#fafafa;--bg-hover:#f5f5f5;--border-light:#f0f0f0;--border-base:#d9d9d9;--shadow-light:0 2px 8px rgba(0,0,0,0.06);--shadow-base:0 4px 12px rgba(0,0,0,0.08);--radius-small:4px;--radius-base:8px;--radius-large:12px;--font-xs:12px;--font-sm:14px;--font-base:16px;--font-lg:20px;--font-xl:24px;--space-xs:4px;--space-sm:8px;--space-md:16px;--space-lg:24px;--space-xl:32px;--duration-fast:200ms;--ease-in-out:cubic-bezier(0.4,0,0.2,1)}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg-secondary);color:var(--text-primary);min-height:100vh}
+        .layout{max-width:900px;margin:0 auto;padding:var(--space-xl) var(--space-lg)}
+        .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-lg)}
+        .header-left h1{font-size:var(--font-xl);font-weight:700}
+        .header-left p{font-size:var(--font-sm);color:var(--text-secondary);margin-top:var(--space-xs)}
+        .header-actions{display:flex;gap:var(--space-sm)}
+        .btn{display:inline-flex;align-items:center;gap:var(--space-xs);padding:var(--space-sm) var(--space-md);border:1px solid var(--border-base);border-radius:var(--radius-small);background:var(--bg-primary);color:var(--text-primary);font-size:var(--font-sm);cursor:pointer;transition:all var(--duration-fast) var(--ease-in-out);text-decoration:none;white-space:nowrap}
+        .btn:hover{border-color:var(--primary-color);color:var(--primary-color)}
+        .btn-primary{background:var(--primary-color);color:#fff;border-color:var(--primary-color)}
+        .btn-primary:hover{opacity:0.85;color:#fff}
+        .btn-danger{color:var(--error-color);border-color:var(--error-color)}
+        .btn-danger:hover{background:var(--error-color);color:#fff}
+        .btn-sm{padding:var(--space-xs) var(--space-sm);font-size:var(--font-xs)}
+        .section{background:var(--bg-primary);border-radius:var(--radius-base);box-shadow:var(--shadow-light);padding:var(--space-lg);margin-bottom:var(--space-lg)}
+        .section h3{font-size:var(--font-base);margin-bottom:var(--space-md);padding-bottom:var(--space-sm);border-bottom:1px solid var(--border-light)}
+        .section p.desc{font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-md)}
+        .row{display:flex;gap:var(--space-md);align-items:center;flex-wrap:wrap;margin-bottom:var(--space-sm)}
+        .tag{display:inline-flex;padding:2px 8px;border-radius:2px;font-size:11px;background:var(--bg-secondary);color:var(--text-secondary)}
+        .tag-warn{background:#fff7e6;color:#fa8c16}
+        .tag-info{background:#e6f7ff;color:#1890ff}
+        .backup-table{width:100%;border-collapse:collapse;margin-top:var(--space-sm)}
+        .backup-table th{padding:var(--space-sm) var(--space-md);text-align:left;font-size:var(--font-xs);font-weight:600;color:var(--text-muted);border-bottom:2px solid var(--border-light)}
+        .backup-table td{padding:var(--space-sm) var(--space-md);font-size:var(--font-xs);border-bottom:1px solid var(--border-light)}
+        .backup-table tr:hover{background:var(--bg-hover)}
+        .empty-state{text-align:center;padding:40px;color:var(--text-muted)}
+        .empty-state p{font-size:var(--font-sm);margin-top:var(--space-sm)}
+        .spinner{display:none;width:32px;height:32px;border:3px solid var(--border-light);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;margin:20px auto}
+        .spinner.show{display:block}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .import-zone{border:2px dashed var(--border-base);border-radius:var(--radius-base);padding:var(--space-lg);text-align:center;cursor:pointer;transition:all var(--duration-fast)}
+        .import-zone:hover{border-color:var(--primary-color);background:var(--bg-hover)}
+        .import-zone input{display:none}
+        .toast{position:fixed;bottom:20px;right:20px;padding:var(--space-sm) var(--space-md);border-radius:var(--radius-small);font-size:var(--font-sm);z-index:100;animation:fadeIn 0.3s;max-width:400px}
+        .toast-success{background:var(--success-color);color:#fff}
+        .toast-error{background:var(--error-color);color:#fff}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        @media(max-width:640px){.layout{padding:var(--space-md)}.row{flex-direction:column;align-items:flex-start}}
+    </style>
+</head>
+<body>
+<div class="layout">
+    <div class="header">
+        <div class="header-left">
+            <h1>备份管理</h1>
+            <p>数据库及设置的导出、导入与版本兼容</p>
+        </div>
+        <div class="header-actions">
+            <a href="/static/browse.html" class="btn">文章浏览</a>
+            <a href="/static/ingestion.html" class="btn">入库管理</a>
+            <a href="/static/logs.html" class="btn">系统日志</a>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>创建备份</h3>
+        <p class="desc">导出数据库（rss.db）和关键配置（SITE_URL, PROXY_URLS 等），不含凭证（token/cookie 需重新登录获取）。</p>
+        <button class="btn btn-primary" onclick="createBackup()">导出备份</button>
+        <span id="exportMsg" style="margin-left:var(--space-md);font-size:var(--font-sm);color:var(--text-muted)"></span>
+    </div>
+
+    <div class="section">
+        <h3>导入备份</h3>
+        <p class="desc">
+            选择备份文件（.zip）上传。<br>
+            <span class="tag tag-info">多版本兼容</span>：旧版本备份可导入新版本；新版本备份无法导入旧版本。<br>
+            <span class="tag tag-warn">安全</span>：导入前自动备份现有数据库；缺失的配置项会跳过，不覆盖已有凭据。
+        </p>
+
+        <div class="import-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <p>点击选择备份文件或拖拽到此处</p>
+            <input type="file" id="fileInput" accept=".zip" onchange="handleFile(event)">
+        </div>
+
+        <div class="row" style="margin-top:var(--space-md)">
+            <label style="font-size:var(--font-sm)"><input type="checkbox" id="restoreDb" checked> 恢复数据库</label>
+            <label style="font-size:var(--font-sm)"><input type="checkbox" id="restoreEnv" checked> 恢复配置(.env)</label>
+            <button class="btn btn-primary btn-sm" id="importBtn" onclick="doImport()" disabled>导入</button>
+            <span id="importMsg" style="font-size:var(--font-xs);color:var(--text-muted)"></span>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>历史备份</h3>
+        <table class="backup-table">
+            <thead><tr><th>文件名</th><th>大小</th><th>创建时间</th><th>操作</th></tr></thead>
+            <tbody id="backupList"><tr><td colspan="4"><div class="empty-state"><p>暂无备份文件</p></div></td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="spinner" id="spinner"></div>
+</div>
+
+<script>
+const API = '/api/admin/backup';
+let selectedFile = null;
+
+async function loadBackups() {
+    const body = document.getElementById('backupList');
+    try {
+        const res = await fetch(`${API}/list`);
+        const json = await res.json();
+        if (!json.success) return;
+        const files = json.data.backups;
+        if (!files || !files.length) {
+            body.innerHTML = '<tr><td colspan="4"><div class="empty-state"><p>暂无备份文件</p><p style="font-size:13px">创建备份后出现在这里</p></div></td></tr>';
+            return;
+        }
+        body.innerHTML = files.map(f => `<tr>
+            <td>${escHtml(f.name)}</td>
+            <td>${f.size_mb} MB</td>
+            <td>${f.created_iso.replace('T',' ').substring(0,19)}</td>
+            <td>
+                <a href="${API}/export" class="btn btn-sm" style="margin-right:4px">下载</a>
+                <button class="btn btn-sm btn-danger" onclick="deleteBackup('${escHtml(f.path)}')">删除</button>
+            </td>
+        </tr>`).join('');
+    } catch(e) { console.error(e); }
+}
+
+async function createBackup() {
+    const msg = document.getElementById('exportMsg');
+    msg.textContent = '导出中...';
+    try {
+        const res = await fetch(`${API}/export`, {method:'POST'});
+        if (!res.ok) { msg.textContent = '导出失败'; return; }
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const disposition = res.headers.get('content-disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        a.download = match ? match[1] : `wq_backup_${Date.now()}.zip`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        msg.textContent = `导出成功: ${a.download}`;
+        toast('备份文件已创建', 'success');
+        setTimeout(loadBackups, 1000);
+    } catch(e) { msg.textContent = '导出失败: ' + e.message; }
+}
+
+function handleFile(evt) {
+    const file = evt.target.files[0];
+    if (!file) return;
+    if (!file.name.endsWith('.zip')) { toast('请选择 .zip 文件', 'error'); return; }
+    selectedFile = file;
+    document.getElementById('importBtn').disabled = false;
+    document.getElementById('importMsg').textContent = `已选择: ${file.name} (${(file.size/1048576).toFixed(2)} MB)`;
+}
+
+async function doImport() {
+    if (!selectedFile) return;
+    const msg = document.getElementById('importMsg');
+    const btn = document.getElementById('importBtn');
+    msg.textContent = '上传中...';
+    btn.disabled = true;
+
+    try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('restore_db', document.getElementById('restoreDb').checked);
+        formData.append('restore_env', document.getElementById('restoreEnv').checked);
+
+        // Upload file via multipart
+        const res = await fetch(`${API}/import/upload`, {
+            method: 'POST',
+            body: formData,
+        });
+        const json = await res.json();
+        if (json.success) {
+            let detail = [];
+            if (json.db_restored) detail.push('数据库已恢复');
+            if (json.env_restored) detail.push(`配置已恢复 (导入${json.env_keys_imported}项, 跳过${json.env_keys_skipped}项)`);
+            toast(detail.join('；') || '导入完成', 'success');
+            msg.textContent = '导入完成';
+        } else {
+            toast(json.error || '导入失败', 'error');
+            msg.textContent = json.error || '导入失败';
+        }
+    } catch(e) {
+        toast('请求失败: ' + e.message, 'error');
+        msg.textContent = '请求失败';
+    }
+    btn.disabled = false;
+    selectedFile = null;
+}
+
+async function deleteBackup(path) {
+    if (!confirm('确定删除此备份文件吗?')) return;
+    try {
+        const res = await fetch(`${API}/delete?path=${encodeURIComponent(path)}`, {method:'DELETE'});
+        const json = await res.json();
+        if (json.success) toast('已删除', 'success');
+        else toast(json.message, 'error');
+        loadBackups();
+    } catch(e) { console.error(e); }
+}
+
+function toast(message, type) {
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.textContent = message;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+}
+
+function escHtml(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+}
+
+// Drag & drop
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--primary-color)'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = 'var(--border-base)'; });
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.style.borderColor = 'var(--border-base)';
+    const file = e.dataTransfer.files[0];
+    if (file) {
+        document.getElementById('fileInput').files = e.dataTransfer.files;
+        handleFile({target: {files: [file]}});
+    }
+});
+
+loadBackups();
+</script>
+</body>
+</html>

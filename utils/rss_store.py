@@ -768,3 +768,87 @@ def get_articles_by_category(category_id: int, limit: int = 50) -> List[Dict]:
         conn.close()
 
 
+def browse_articles(fakeid: Optional[str] = None, page: int = 1, per_page: int = 20,
+                    keyword: Optional[str] = None) -> List[Dict]:
+    """浏览已存储的文章（分页、筛选、搜索）"""
+    conn = _get_conn()
+    try:
+        conditions = ["1=1"]
+        params = []
+
+        if fakeid:
+            conditions.append("fakeid = ?")
+            params.append(fakeid)
+
+        if keyword:
+            conditions.append("(title LIKE ? OR digest LIKE ?)")
+            kw = f"%{keyword}%"
+            params.extend([kw, kw])
+
+        where = " AND ".join(conditions)
+
+        offset = (page - 1) * per_page
+        params.extend([per_page, offset])
+
+        rows = conn.execute(
+            f"SELECT id, fakeid, title, link, digest, cover, author, publish_time, fetched_at, source "
+            f"FROM articles WHERE {where} ORDER BY publish_time DESC, id DESC LIMIT ? OFFSET ?",
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def count_articles(fakeid: Optional[str] = None, keyword: Optional[str] = None) -> int:
+    """统计文章总数（用于分页）"""
+    conn = _get_conn()
+    try:
+        conditions = ["1=1"]
+        params = []
+
+        if fakeid:
+            conditions.append("fakeid = ?")
+            params.append(fakeid)
+
+        if keyword:
+            conditions.append("(title LIKE ? OR digest LIKE ?)")
+            kw = f"%{keyword}%"
+            params.extend([kw, kw])
+
+        where = " AND ".join(conditions)
+        row = conn.execute(
+            f"SELECT COUNT(*) AS cnt FROM articles WHERE {where}", params
+        ).fetchone()
+        return row["cnt"] if row else 0
+    finally:
+        conn.close()
+
+
+def get_article_by_id(article_id: int) -> Optional[Dict]:
+    """获取文章完整内容"""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM articles WHERE id = ?", (article_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_subscriptions_with_articles() -> List[Dict]:
+    """获取有文章缓存的订阅列表（带文章计数）"""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT s.fakeid, s.nickname, s.alias, s.head_img, "
+            "COUNT(a.id) AS article_count "
+            "FROM subscriptions s "
+            "INNER JOIN articles a ON a.fakeid = s.fakeid "
+            "GROUP BY s.fakeid "
+            "ORDER BY article_count DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()

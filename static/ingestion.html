@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>入库管理 - WeChat Download API</title>
+    <style>
+        :root{--primary-color:#1890ff;--success-color:#52c41a;--warning-color:#fa8c16;--error-color:#ff4d4f;--text-primary:#262626;--text-secondary:#595959;--text-muted:#8c8c8c;--bg-primary:#ffffff;--bg-secondary:#fafafa;--bg-hover:#f5f5f5;--border-light:#f0f0f0;--border-base:#d9d9d9;--shadow-light:0 2px 8px rgba(0,0,0,0.06);--shadow-base:0 4px 12px rgba(0,0,0,0.08);--radius-small:4px;--radius-base:8px;--radius-large:12px;--font-xs:12px;--font-sm:14px;--font-base:16px;--font-lg:20px;--font-xl:24px;--space-xs:4px;--space-sm:8px;--space-md:16px;--space-lg:24px;--space-xl:32px;--duration-fast:200ms;--ease-in-out:cubic-bezier(0.4,0,0.2,1)}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg-secondary);color:var(--text-primary);min-height:100vh}
+        .layout{max-width:1200px;margin:0 auto;padding:var(--space-xl) var(--space-lg)}
+        .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-lg)}
+        .header-left h1{font-size:var(--font-xl);font-weight:700}
+        .header-left p{font-size:var(--font-sm);color:var(--text-secondary);margin-top:var(--space-xs)}
+        .header-actions{display:flex;gap:var(--space-sm)}
+        .btn{display:inline-flex;align-items:center;gap:var(--space-xs);padding:var(--space-sm) var(--space-md);border:1px solid var(--border-base);border-radius:var(--radius-small);background:var(--bg-primary);color:var(--text-primary);font-size:var(--font-sm);cursor:pointer;transition:all var(--duration-fast) var(--ease-in-out);text-decoration:none;white-space:nowrap}
+        .btn:hover{border-color:var(--primary-color);color:var(--primary-color)}
+        .btn-primary{background:var(--primary-color);color:#fff;border-color:var(--primary-color)}
+        .btn-primary:hover{opacity:0.85;color:#fff}
+        .btn-danger{color:var(--error-color);border-color:var(--error-color)}
+        .btn-danger:hover{background:var(--error-color);color:#fff}
+        .btn-sm{padding:var(--space-xs) var(--space-sm);font-size:var(--font-xs)}
+        .card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:var(--space-md);margin-bottom:var(--space-lg)}
+        .stat-card{background:var(--bg-primary);padding:var(--space-md);border-radius:var(--radius-base);box-shadow:var(--shadow-light);text-align:center}
+        .stat-card .label{font-size:var(--font-xs);color:var(--text-muted);margin-bottom:var(--space-xs)}
+        .stat-card .value{font-size:var(--font-xl);font-weight:700}
+        .stat-card .channel{font-size:var(--font-xs);color:var(--text-muted);margin-top:var(--space-xs)}
+        .toolbar{display:flex;gap:var(--space-md);margin-bottom:var(--space-md);flex-wrap:wrap;align-items:center}
+        .filter-select{padding:var(--space-sm) var(--space-md);border:1px solid var(--border-base);border-radius:var(--radius-small);font-size:var(--font-sm);outline:none;background:var(--bg-primary);cursor:pointer;min-width:120px}
+        .filter-select:focus{border-color:var(--primary-color)}
+        .search-input{padding:var(--space-sm) var(--space-md);border:1px solid var(--border-base);border-radius:var(--radius-small);font-size:var(--font-sm);outline:none;min-width:180px}
+        .search-input:focus{border-color:var(--primary-color)}
+        .stats-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-md);font-size:var(--font-sm);color:var(--text-secondary)}
+        .log-table{width:100%;background:var(--bg-primary);border-radius:var(--radius-base);box-shadow:var(--shadow-light);overflow:hidden}
+        .log-table table{width:100%;border-collapse:collapse}
+        .log-table th{padding:var(--space-sm) var(--space-md);text-align:left;font-size:var(--font-xs);font-weight:600;color:var(--text-muted);border-bottom:2px solid var(--border-light);background:var(--bg-secondary)}
+        .log-table td{padding:var(--space-sm) var(--space-md);font-size:var(--font-xs);border-bottom:1px solid var(--border-light);vertical-align:top}
+        .log-table tr:hover{background:var(--bg-hover)}
+        .status-badge{display:inline-flex;padding:1px 6px;border-radius:2px;font-weight:600;font-size:11px}
+        .status-success{background:#f6ffed;color:#52c41a}.status-failed{background:#fff2f0;color:#ff4d4f}.status-pending{background:#fff7e6;color:#fa8c16}
+        .channel-badge{display:inline-flex;padding:1px 6px;border-radius:2px;font-size:11px}
+        .channel-poll{background:#e6f7ff;color:#1890ff}.channel-deep_fetch{background:#f9f0ff;color:#722ed1}
+        .error-msg{color:var(--error-color);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .link-ellipsis{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block}
+        .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px;color:var(--text-muted)}
+        .empty-state p{margin-top:var(--space-sm);font-size:var(--font-sm)}
+        .spinner{display:none;width:32px;height:32px;border:3px solid var(--border-light);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;margin:var(--space-xl) auto}
+        .spinner.show{display:block}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .pagination{display:flex;align-items:center;justify-content:center;gap:var(--space-sm);margin-top:var(--space-lg)}
+        .pagination span{color:var(--text-secondary);font-size:var(--font-sm)}
+        .pagination button:disabled{opacity:0.4;cursor:not-allowed}
+        .retry-section{background:var(--bg-primary);padding:var(--space-md);border-radius:var(--radius-base);box-shadow:var(--shadow-light);margin-bottom:var(--space-lg)}
+        .retry-section h3{font-size:var(--font-base);margin-bottom:var(--space-sm)}
+        .retry-form{display:flex;gap:var(--space-sm);flex-wrap:wrap;align-items:flex-end}
+        .retry-form input{padding:var(--space-sm) var(--space-md);border:1px solid var(--border-base);border-radius:var(--radius-small);font-size:var(--font-sm);outline:none;min-width:200px}
+        .retry-form input:focus{border-color:var(--primary-color)}
+        @media(max-width:640px){.layout{padding:var(--space-md)}.toolbar{flex-direction:column}.card-grid{grid-template-columns:repeat(2,1fr)}.log-table{overflow-x:auto}.retry-form{flex-direction:column}}
+    </style>
+</head>
+<body>
+<div class="layout">
+    <div class="header">
+        <div class="header-left">
+            <h1>入库管理</h1>
+            <p>文章抓取队列、历史记录与重试</p>
+        </div>
+        <div class="header-actions">
+            <a href="/static/browse.html" class="btn">文章浏览</a>
+            <a href="/static/logs.html" class="btn">系统日志</a>
+            <a href="/static/admin.html" class="btn">管理面板</a>
+        </div>
+    </div>
+
+    <div class="card-grid" id="statsGrid"></div>
+
+    <div class="retry-section">
+        <h3>手动重试入库</h3>
+        <div class="retry-form">
+            <input placeholder="公众号 fakeid (可选)" id="retryFakeid">
+            <input placeholder="文章链接 (可选，多个用逗号分隔)" id="retryLinks" style="min-width:300px">
+            <input type="number" value="10" min="1" max="50" id="retryLimit" style="width:80px" title="最大重试数">
+            <button class="btn btn-primary btn-sm" onclick="retryIngestion()">开始重试</button>
+            <span id="retryMsg" style="font-size:var(--font-xs);color:var(--text-muted)"></span>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <select class="filter-select" id="statusFilter" onchange="reloadLogs()">
+            <option value="">全部状态</option>
+            <option value="success">成功</option>
+            <option value="failed">失败</option>
+            <option value="pending">等待中</option>
+        </select>
+        <select class="filter-select" id="channelFilter" onchange="reloadLogs()">
+            <option value="">全部渠道</option>
+            <option value="poll">轮询器 (poll)</option>
+            <option value="deep_fetch">历史抓取 (deep_fetch)</option>
+        </select>
+        <input class="search-input" placeholder="搜索链接/标题/错误..." id="keywordInput" onkeydown="if(event.key==='Enter')reloadLogs()">
+        <button class="btn btn-sm" onclick="reloadLogs()">查询</button>
+        <button class="btn btn-sm" onclick="resetFilters()">重置</button>
+    </div>
+
+    <div class="stats-bar"><span id="statsInfo">加载中...</span></div>
+
+    <div class="log-table">
+        <table>
+            <thead><tr><th>公众号</th><th>文章链接</th><th style="width:60px">状态</th><th style="width:70px">渠道</th><th>错误信息</th><th>尝试</th><th>时间</th></tr></thead>
+            <tbody id="logBody"></tbody>
+        </table>
+    </div>
+
+    <div class="spinner" id="spinner"></div>
+    <div class="pagination" id="pagination"></div>
+</div>
+
+<script>
+const API = '/api/admin/ingestion';
+let currentPage = 1;
+
+async function loadStats() {
+    try {
+        const res = await fetch(`${API}/stats`);
+        const json = await res.json();
+        if (!json.success) return;
+        const d = json.data;
+        const grid = document.getElementById('statsGrid');
+        const channels = Object.entries(d.by_channel||{}).map(([k,v])=>`<div class="channel">${k}: ${v}篇</div>`).join('');
+        grid.innerHTML = `
+            <div class="stat-card"><div class="label">总计</div><div class="value">${d.total}</div><div class="channel">全部记录</div></div>
+            <div class="stat-card"><div class="label" style="color:var(--success-color)">成功</div><div class="value" style="color:var(--success-color)">${d.success}</div></div>
+            <div class="stat-card"><div class="label" style="color:var(--error-color)">失败</div><div class="value" style="color:var(--error-color)">${d.failed}</div></div>
+            <div class="stat-card"><div class="label" style="color:var(--warning-color)">等待中</div><div class="value" style="color:var(--warning-color)">${d.pending}</div></div>
+            <div class="stat-card"><div class="label">渠道分布</div><div class="value" style="font-size:var(--font-sm)">${channels||'暂无'}</div></div>
+        `;
+    } catch(e) { console.error(e); }
+}
+
+async function loadLogs() {
+    const spinner = document.getElementById('spinner');
+    const body = document.getElementById('logBody');
+    const stats = document.getElementById('statsInfo');
+    const pag = document.getElementById('pagination');
+    spinner.classList.add('show'); body.innerHTML = '';
+
+    try {
+        const params = new URLSearchParams({page: currentPage, per_page: 30});
+        const status = document.getElementById('statusFilter').value;
+        const channel = document.getElementById('channelFilter').value;
+        const keyword = document.getElementById('keywordInput').value.trim();
+        if (status) params.set('status', status);
+        if (channel) params.set('channel', channel);
+        if (keyword) params.set('keyword', keyword);
+
+        const res = await fetch(`${API}?${params}`);
+        const json = await res.json();
+        if (!json.success) { body.innerHTML = '<tr><td colspan="7" class="empty-state"><p>加载失败</p></td></tr>'; return; }
+
+        const { logs, total, page, total_pages } = json.data;
+        stats.textContent = `共 ${total} 条` + (total_pages ? ` · 第 ${page}/${total_pages} 页` : '');
+        if (!logs.length) { body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><p>暂无入库记录</p></div></td></tr>'; pag.innerHTML = ''; return; }
+
+        body.innerHTML = logs.map(l => `<tr>
+            <td>${escHtml(l.nickname||l.fakeid||'')}</td>
+            <td><a href="${escHtml(l.article_link)}" target="_blank" class="link-ellipsis" title="${escHtml(l.article_link)}">${escHtml((l.title||l.article_link||'').substring(0,60))}</a></td>
+            <td><span class="status-badge status-${l.status}">${l.status}</span></td>
+            <td><span class="channel-badge channel-${l.channel}">${l.channel}</span></td>
+            <td class="error-msg" title="${escHtml(l.error_msg||'')}">${escHtml((l.error_msg||'').substring(0,80))}</td>
+            <td>${l.attempt}</td>
+            <td>${new Date(l.updated_at*1000).toLocaleString('zh-CN')}</td>
+        </tr>`).join('');
+
+        renderPagination(page, total_pages);
+    } catch(e) { body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><p>加载出错: '+e.message+'</p></div></td></tr>'; }
+    finally { spinner.classList.remove('show'); }
+}
+
+function renderPagination(page, tp) {
+    const pag = document.getElementById('pagination');
+    if (tp <= 1) { pag.innerHTML = ''; return; }
+    pag.innerHTML = `<button class="btn btn-sm" onclick="goPage(${page-1})" ${page<=1?'disabled':''}>‹</button>
+        <span>${page}/${tp}</span>
+        <button class="btn btn-sm" onclick="goPage(${page+1})" ${page>=tp?'disabled':''}>›</button>`;
+}
+function goPage(p) { currentPage = p; loadLogs(); window.scrollTo(0,0); }
+function reloadLogs() { currentPage = 1; loadLogs(); loadStats(); }
+function resetFilters() {
+    document.getElementById('statusFilter').value = '';
+    document.getElementById('channelFilter').value = '';
+    document.getElementById('keywordInput').value = '';
+    reloadLogs();
+}
+
+async function retryIngestion() {
+    const fakeid = document.getElementById('retryFakeid').value.trim();
+    const linksRaw = document.getElementById('retryLinks').value.trim();
+    const limit = parseInt(document.getElementById('retryLimit').value) || 10;
+    const msg = document.getElementById('retryMsg');
+
+    const body = { limit };
+    if (fakeid) body.fakeid = fakeid;
+    if (linksRaw) body.article_links = linksRaw.split(',').map(s=>s.trim()).filter(Boolean);
+
+    msg.textContent = '重试中...';
+    try {
+        const res = await fetch(`${API}/retry`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+        const json = await res.json();
+        msg.textContent = json.success ? `完成：重试了 ${json.data.retried} 篇，共 ${json.data.links} 个链接` : `失败: ${json.error}`;
+        setTimeout(loadLogs, 1000);
+    } catch(e) { msg.textContent = '请求失败: ' + e.message; }
+}
+
+function escHtml(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+}
+
+loadStats();
+loadLogs();
+</script>
+</body>
+</html>
