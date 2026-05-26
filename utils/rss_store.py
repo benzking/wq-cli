@@ -130,7 +130,15 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_source ON articles(source)")
         conn.commit()
         logger.info("Added source column and index to articles table")
-    
+    if "starred" not in columns:
+        logger.info("Adding starred column to articles table")
+        conn.execute("ALTER TABLE articles ADD COLUMN starred INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
+    if "images_localized" not in columns:
+        logger.info("Adding images_localized column to articles table")
+        conn.execute("ALTER TABLE articles ADD COLUMN images_localized INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
+
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS config (
             key        TEXT PRIMARY KEY,
@@ -850,5 +858,134 @@ def get_subscriptions_with_articles() -> List[Dict]:
             "ORDER BY article_count DESC"
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def toggle_star(article_id: int):
+    """切换文章星标，返回新的 starred 状态"""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT starred FROM articles WHERE id=?", (article_id,)
+        ).fetchone()
+        if not row:
+            return None
+        new_val = 1 if not row[0] else 0
+        conn.execute(
+            "UPDATE articles SET starred=? WHERE id=?", (new_val, article_id)
+        )
+        conn.commit()
+        return bool(new_val)
+    finally:
+        conn.close()
+
+
+def init_image_queue_table():
+    conn = _get_conn()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS image_download_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                article_id INTEGER NOT NULL,
+                image_url TEXT NOT NULL,
+                local_path TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                attempt INTEGER NOT NULL DEFAULT 0,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_iq_status ON image_download_queue(status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_iq_article ON image_download_queue(article_id)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def queue_images(article_id: int, image_urls: list):
+    conn = _get_conn()
+    try:
+        _now = time.time()
+        for url in image_urls:
+            conn.execute(
+                "INSERT INTO image_download_queue (article_id, image_url, status, created_at, updated_at) "
+                "VALUES (?, ?, 'pending', ?, ?)",
+                (article_id, url, _now, _now)
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_pending_images(limit: int = 5) -> list:
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM image_download_queue WHERE status='pending' "
+            "ORDER BY created_at ASC LIMIT ?",
+            (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def mark_image_done(queue_id: int, local_path: str):
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE image_download_queue SET status='done', local_path=?, updated_at=? WHERE id=?",
+            (local_path, time.time(), queue_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def mark_image_failed(queue_id: int):
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE image_download_queue SET status='failed', attempt=attempt+1, updated_at=? WHERE id=?",
+            (time.time(), queue_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def replace_article_images(article_id: int, mapping: dict) -> bool:
+    conn = _get_conn()
+    try:
+        row = conn.execute("SELECT content FROM articles WHERE id=?", (article_id,)).fetchone()
+        if not row:
+            return False
+        content = row[0] or ""
+        # 按 URL 长度降序替换，防止短 URL 是长 URL 的子串导致内容损坏
+        for url, local in sorted(mapping.items(), key=lambda x: -len(x[0])):
+            content = content.replace(url, f"/static/images/{article_id}/{local}")
+        conn.execute("UPDATE articles SET content=?, images_localized=1 WHERE id=?", (content, article_id))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def get_image_queue_stats() -> dict:
+    conn = _get_conn()
+    try:
+        total = conn.execute("SELECT COUNT(*) FROM image_download_queue").fetchone()[0]
+        pending = conn.execute(
+            "SELECT COUNT(*) FROM image_download_queue WHERE status='pending'"
+        ).fetchone()[0]
+        done = conn.execute(
+            "SELECT COUNT(*) FROM image_download_queue WHERE status='done'"
+        ).fetchone()[0]
+        failed = conn.execute(
+            "SELECT COUNT(*) FROM image_download_queue WHERE status='failed'"
+        ).fetchone()[0]
+        return {"total": total, "pending": pending, "done": done, "failed": failed}
     finally:
         conn.close()

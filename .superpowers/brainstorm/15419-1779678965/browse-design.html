@@ -1,0 +1,194 @@
+<h2>文章浏览 — 三栏 Google Reader 风格</h2>
+<p class="subtitle">左侧：分类+公众号 · 中间：文章列表 · 右侧：文章内容</p>
+
+<div class="mockup">
+  <div class="mockup-header">三栏布局预览（1280px+ 宽屏）</div>
+  <div class="mockup-body" style="padding:0;background:#fff;border-radius:12px;overflow:hidden">
+    <!-- 三栏布局 -->
+    <div style="display:flex;height:480px">
+      <!-- 第一栏：分类+公众号 -->
+      <div style="width:220px;background:#f8f9fa;border-right:1px solid #e9ecef;display:flex;flex-direction:column;flex-shrink:0">
+        <div style="padding:10px 14px;border-bottom:1px solid #e9ecef;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px;font-weight:600;color:#212529">订阅源</span>
+          <span style="font-size:11px;color:#adb5bd">120</span>
+        </div>
+        <div style="overflow:auto;flex:1">
+          <!-- 未分类 -->
+          <div style="padding:6px 14px">
+            <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;cursor:pointer;background:#e7f5ff">
+              <span style="font-size:18px">📋</span>
+              <span style="font-size:13px;font-weight:600;color:#1971c2">全部文章</span>
+              <span style="margin-left:auto;font-size:11px;color:#adb5bd;background:#f1f3f5;padding:1px 6px;border-radius:8px">12.3k</span>
+            </div>
+          </div>
+          <!-- 分类分组 -->
+          <div style="padding:2px 14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;cursor:pointer">
+              <div style="display:flex;align-items:center;gap:4px">
+                <span style="font-size:10px;color:#adb5bd;transition:0.2s">▾</span>
+                <span style="font-size:12px;font-weight:600;color:#495057">📰 新闻资讯</span>
+              </div>
+              <span style="font-size:10px;color:#adb5bd">5</span>
+            </div>
+            <div style="padding-left:16px">
+              <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:4px;cursor:pointer">
+                <img src="" style="width:18px;height:18px;border-radius:50%;background:#dee2e6;flex-shrink:0" onerror="this.style.display='none'">
+                <span style="font-size:12px;color:#495057;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">人民日报</span>
+                <span style="margin-left:auto;font-size:10px;color:#adb5bd">8.2k</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:4px;cursor:pointer">
+                <img src="" style="width:18px;height:18px;border-radius:50%;background:#dee2e6;flex-shrink:0" onerror="this.style.display='none'">
+                <span style="font-size:12px;color:#495057;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">新华社</span>
+                <span style="margin-left:auto;font-size:10px;color:#adb5bd">5.1k</span>
+              </div>
+            </div>
+          </div>
+          <div style="padding:2px 14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;cursor:pointer">
+              <div style="display:flex;align-items:center;gap:4px">
+                <span style="font-size:10px;color:#adb5bd">▸</span>
+                <span style="font-size:12px;font-weight:600;color:#495057">💻 科技</span>
+              </div>
+              <span style="font-size:10px;color:#adb5bd">3</span>
+            </div>
+          </div>
+          <div style="padding:2px 14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px;cursor:pointer">
+              <div style="display:flex;align-items:center;gap:4px">
+                <span style="font-size:10px;color:#adb5bd">▸</span>
+                <span style="font-size:12px;font-weight:600;color:#495057">🎯 其他</span>
+              </div>
+              <span style="font-size:10px;color:#adb5bd">12</span>
+            </div>
+          </div>
+        </div>
+        <div style="border-top:1px solid #e9ecef;padding:8px 14px;font-size:11px;color:#adb5bd">
+          已订阅 120 · 有更新 8
+        </div>
+      </div>
+
+      <!-- 第二栏：文章列表 -->
+      <div style="width:320px;background:#fff;border-right:1px solid #e9ecef;display:flex;flex-direction:column;flex-shrink:0">
+        <div style="padding:10px 14px;border-bottom:1px solid #e9ecef;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px;font-weight:600;color:#212529">人民日报</span>
+          <span style="font-size:11px;color:#adb5bd">8,234</span>
+        </div>
+        <div style="padding:8px 12px;border-bottom:1px solid #e9ecef">
+          <input placeholder="搜索文章..." style="width:100%;padding:6px 10px;border:1px solid #e9ecef;border-radius:6px;font-size:12px;outline:none;background:#f8f9fa">
+        </div>
+        <div style="overflow:auto;flex:1">
+          <!-- 文章条目 -->
+          <div style="padding:12px 14px;border-bottom:1px solid #f1f3f5;cursor:pointer;background:#e7f5ff">
+            <div style="font-size:13px;font-weight:500;color:#1971c2;line-height:1.4;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
+              中央经济工作会议部署2026年经济工作重点任务
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#adb5bd">
+              <span>人民日报</span>
+              <span>·</span>
+              <span>2026-05-24</span>
+            </div>
+          </div>
+          <div style="padding:12px 14px;border-bottom:1px solid #f1f3f5;cursor:pointer">
+            <div style="font-size:13px;color:#212529;line-height:1.4;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
+              各地加快推进重点项目建设 确保二季度"双过半"
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#adb5bd">
+              <span>人民日报</span>
+              <span>·</span>
+              <span>2026-05-24</span>
+            </div>
+          </div>
+          <div style="padding:12px 14px;border-bottom:1px solid #f1f3f5;cursor:pointer">
+            <div style="font-size:13px;color:#212529;line-height:1.4;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
+              我国新能源汽车产销量连续11年居全球首位 行业发展进入新阶段
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#adb5bd">
+              <span>人民日报</span>
+              <span>·</span>
+              <span>2026-05-23</span>
+            </div>
+          </div>
+          <div style="padding:12px 14px;border-bottom:1px solid #f1f3f5;cursor:pointer">
+            <div style="font-size:13px;color:#212529;line-height:1.4;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
+              一季度全国规模以上工业增加值同比增长6.2%
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#adb5bd">
+              <span>人民日报</span>
+              <span>·</span>
+              <span>2026-05-23</span>
+            </div>
+          </div>
+          <div style="padding:12px 14px;border-bottom:1px solid #f1f3f5;cursor:pointer">
+            <div style="font-size:13px;color:#212529;line-height:1.4;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
+              数字经济发展提速 5G基站数量突破500万座
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#adb5bd">
+              <span>人民日报</span>
+              <span>·</span>
+              <span>2026-05-22</span>
+            </div>
+          </div>
+        </div>
+        <div style="padding:8px 14px;border-top:1px solid #e9ecef;display:flex;justify-content:center;gap:8px">
+          <button style="padding:4px 10px;border:1px solid #e9ecef;border-radius:4px;background:#fff;font-size:12px;cursor:pointer">← 上一页</button>
+          <span style="font-size:12px;color:#adb5bd;padding:4px 4px">1 / 412</span>
+          <button style="padding:4px 10px;border:1px solid #e9ecef;border-radius:4px;background:#fff;font-size:12px;cursor:pointer">下一页 →</button>
+        </div>
+      </div>
+
+      <!-- 第三栏：文章内容 -->
+      <div style="flex:1;background:#fff;display:flex;flex-direction:column;min-width:0">
+        <!-- 文章头部 -->
+        <div style="padding:16px 24px;border-bottom:1px solid #e9ecef">
+          <h3 style="font-size:20px;font-weight:700;color:#212529;line-height:1.4;margin-bottom:8px">中央经济工作会议部署2026年经济工作重点任务</h3>
+          <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:#868e96">
+            <img src="" style="width:20px;height:20px;border-radius:50%;background:#dee2e6" onerror="this.style.display='none'">
+            <span>人民日报</span>
+            <span>·</span>
+            <span>2026-05-24 08:30</span>
+            <span>·</span>
+            <a href="#" style="color:#228be6;text-decoration:none">原文链接 ↗</a>
+          </div>
+        </div>
+        <!-- 文章正文 -->
+        <div style="flex:1;overflow:auto;padding:20px 24px;font-size:15px;line-height:1.8;color:#343a40">
+          <p style="margin-bottom:16px">中央经济工作会议近日在北京召开，会议深入分析了当前经济形势，并对2026年经济工作重点任务进行了全面部署。</p>
+          <p style="margin-bottom:16px">会议强调，要坚持稳中求进工作总基调，完整、准确、全面贯彻新发展理念，加快构建新发展格局，着力推动高质量发展。</p>
+          <p style="margin-bottom:16px">会议指出，2026年是"十五五"规划开局之年，做好经济工作意义重大。要统筹扩大内需和深化供给侧结构性改革，统筹新型城镇化和乡村全面振兴，统筹高质量发展和高水平安全。</p>
+          <div style="background:#f8f9fa;border-radius:8px;padding:14px;margin:16px 0;text-align:center;color:#adb5bd;font-size:13px">
+            [图片: 通过代理加载中...]
+          </div>
+          <p style="margin-bottom:16px">会议要求，各地区各部门要切实把思想和行动统一到党中央决策部署上来，坚定信心、真抓实干，确保完成全年经济社会发展目标任务。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:16px">
+  <h3>交互细节</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>亮点</h4>
+      <ul>
+        <li><strong>选中高亮</strong> — 当前文章蓝色背景，和侧边栏选中项一致</li>
+        <li><strong>分类折叠</strong> — 点击展开/收起，默认展开有更新的分类</li>
+        <li><strong>文章计数</strong> — 每个公众号旁标注文章数，一目了然</li>
+        <li><strong>键盘导航</strong> — j/k 上下切换文章，v 打开原文（可选）</li>
+        <li><strong>搜索过滤</strong> — 中间栏顶部支持标题关键词搜索</li>
+        <li><strong>全文渲染</strong> — 右栏展示完整 HTML 内容，图片走代理</li>
+        <li><strong>响应式</strong> — 窄屏变为单列，依次收起第三栏 → 第二栏</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>与现有 API 匹配情况</h4>
+      <ul>
+        <li>✅ <code>/api/browse/subscriptions</code> — 第一栏订阅列表</li>
+        <li>✅ <code>/api/admin/categories</code> — 第一栏分类组织</li>
+        <li>✅ <code>/api/browse/articles?fakeid=xxx&keyword=xxx</code> — 第二栏</li>
+        <li>✅ <code>/api/browse/article/{id}</code> — 第三栏</li>
+        <li>⚠️ "全部文章"模式需不带 fakeid 参数调用</li>
+      </ul>
+    </div>
+  </div>
+</div>

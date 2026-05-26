@@ -1,0 +1,1 @@
+import{_ as a,p as s,e as r,t as n,n as o}from"./index-BHBA4VGb.js";const p={__name:"StatusBadge",props:{type:{type:String,required:!0}},setup(e){return(t,c)=>(s(),r("span",{class:o(["badge",`badge-${e.type}`])},[n(t.$slots,"default",{},void 0)],2))}},_=a(p,[["__scopeId","data-v-cf974345"]]);export{_ as S};

@@ -1,0 +1,92 @@
+<h2>数据看板 — 最终设计确认</h2>
+<p class="subtitle">Notion 风格 · 6 张卡片 + 最近失败列表</p>
+
+<div class="mockup">
+  <div class="mockup-header">数据看板（首页）预览</div>
+  <div class="mockup-body" style="padding:20px;background:#f8f9fa">
+    <!-- 6 卡片 -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+      <div style="background:#fff;border-radius:12px;padding:18px;border:1px solid #e9ecef;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="font-size:12px;color:#868e96;margin-bottom:8px">在线状态</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:10px;height:10px;background:#40c057;border-radius:50%;box-shadow:0 0 6px rgba(64,192,87,0.4)"></div>
+          <span style="font-size:20px;font-weight:700;color:#212529">已认证</span>
+        </div>
+        <div style="font-size:12px;color:#adb5bd;margin-top:4px">当前: Demo公众号</div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:18px;border:1px solid #e9ecef;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="font-size:12px;color:#868e96;margin-bottom:8px">累计入库</div>
+        <div style="font-size:28px;font-weight:700;color:#212529">12,345</div>
+        <div style="font-size:12px;color:#adb5bd;margin-top:2px">文章总数</div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:18px;border:1px solid #e9ecef;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="font-size:12px;color:#868e96;margin-bottom:8px">今日入库</div>
+        <div style="font-size:28px;font-weight:700;color:#212529">+23</div>
+        <div style="font-size:12px;margin-top:2px"><span style="color:#40c057">成功 21</span> · <span style="color:#e03131">失败 2</span> · <span style="color:#228be6">成功率 92%</span></div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:18px;border:1px solid #e9ecef;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="font-size:12px;color:#868e96;margin-bottom:8px">已订阅公众号</div>
+        <div style="font-size:28px;font-weight:700;color:#212529">120</div>
+        <div style="font-size:12px;color:#adb5bd;margin-top:2px">个公众号</div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:18px;border:1px solid #e9ecef;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="font-size:12px;color:#868e96;margin-bottom:8px">待处理队列</div>
+        <div style="font-size:28px;font-weight:700;color:#212529">15</div>
+        <div style="font-size:12px;color:#adb5bd;margin-top:2px">条待抓取</div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:18px;border:1px solid #e9ecef;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="font-size:12px;color:#868e96;margin-bottom:8px">今日有更新</div>
+        <div style="font-size:28px;font-weight:700;color:#212529">8</div>
+        <div style="font-size:12px;color:#adb5bd;margin-top:2px">个公众号</div>
+      </div>
+    </div>
+    <!-- 最近失败 -->
+    <div style="background:#fff;border-radius:12px;padding:18px;border:1px solid #e9ecef;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <div style="font-size:14px;font-weight:600;color:#212529;margin-bottom:12px">最近失败</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="color:#868e96;text-align:left">
+            <th style="padding:6px 8px;border-bottom:1px solid #e9ecef;font-weight:500">公众号</th>
+            <th style="padding:6px 8px;border-bottom:1px solid #e9ecef;font-weight:500">文章</th>
+            <th style="padding:6px 8px;border-bottom:1px solid #e9ecef;font-weight:500">原因</th>
+            <th style="padding:6px 8px;border-bottom:1px solid #e9ecef;font-weight:500">时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:6px 8px;border-bottom:1px solid #f1f3f5">人民日报</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #f1f3f5;color:#228be6;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">/s/abc123def456...</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #f1f3f5;color:#e03131">timeout</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #f1f3f5;color:#adb5bd">2 分钟前</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 8px;border-bottom:1px solid #f1f3f5">新京报</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #f1f3f5;color:#228be6;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">/s/xyz789ghi012...</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #f1f3f5;color:#e03131">验证码</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #f1f3f5;color:#adb5bd">15 分钟前</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros">
+    <h4>这个看板的特点</h4>
+    <ul>
+      <li>一行扫完关键指标，在线状态用呼吸灯效果</li>
+      <li>今日入库卡片同时展示"成功/失败/成功率"，信息密度高</li>
+      <li>最近失败列表支持点击跳转重试（后续文章浏览页可联动）</li>
+      <li>6 张卡片 3×2 响应式网格，窄屏变 2×3 或 1×6</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>可选增强（不在首期范围内）</h4>
+    <ul>
+      <li>7 天入库趋势柱状图（纯 CSS bar chart）</li>
+      <li>未读文章数标注</li>
+      <li>WebSocket 实时推送入库状态变化</li>
+    </ul>
+  </div>
+</div>

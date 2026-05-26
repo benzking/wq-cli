@@ -1,0 +1,162 @@
+<h2>文章第三栏 — 工具栏 + 本地图片方案</h2>
+<p class="subtitle">右上角操作按钮 + 图片本地化存储</p>
+
+<div class="mockup" style="margin-bottom:20px">
+  <div class="mockup-header">第三栏文章视图（含工具栏）</div>
+  <div class="mockup-body" style="padding:0;background:#fff;border-radius:8px;overflow:hidden">
+    <!-- 文章头部 + 工具栏 -->
+    <div style="padding:16px 24px;border-bottom:1px solid #e9ecef">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between">
+        <div>
+          <h3 style="font-size:20px;font-weight:700;color:#212529;line-height:1.4;margin-bottom:8px;margin-top:0">
+            中央经济工作会议部署2026年经济工作重点任务
+          </h3>
+          <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:#868e96">
+            <span>人民日报</span>
+            <span>·</span>
+            <span>2026-05-24 08:30</span>
+            <span>·</span>
+            <span style="background:#f1f3f5;padding:2px 8px;border-radius:4px;font-size:11px">已抓取</span>
+          </div>
+        </div>
+        <!-- 工具栏 -->
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          <button title="收藏" style="width:32px;height:32px;border:1px solid #e9ecef;border-radius:6px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px">☆</button>
+          <button title="重新抓取" style="width:32px;height:32px;border:1px solid #e9ecef;border-radius:6px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px">🔄</button>
+          <div style="width:1px;background:#e9ecef;margin:0 4px"></div>
+          <button title="原文链接" style="width:32px;height:32px;border:1px solid #e9ecef;border-radius:6px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px">↗</button>
+          <button title="导出 PDF" style="width:32px;height:32px;border:1px solid #e9ecef;border-radius:6px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px">📄</button>
+          <button title="导出 Markdown (含图片)" style="width:32px;height:32px;border:1px solid #e9ecef;border-radius:6px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px">📦</button>
+        </div>
+      </div>
+    </div>
+    <!-- 文章正文（图片已本地化） -->
+    <div style="padding:20px 24px;font-size:15px;line-height:1.8;color:#343a40;max-height:400px;overflow:auto">
+      <p style="margin-bottom:16px">中央经济工作会议近日在北京召开，会议深入分析了当前经济形势，并对2026年经济工作重点任务进行了全面部署。</p>
+      <div style="margin:16px 0">
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='200'%3E%3Crect fill='%23f1f3f5' width='600' height='200' rx='8'/%3E%3Ctext x='300' y='100' text-anchor='middle' fill='%23adb5bd' font-size='14'%3E本地图片: /data/images/123/abc.jpg%3C/text%3E%3C/svg%3E" style="max-width:100%;border-radius:8px">
+      </div>
+      <p style="margin-bottom:16px">会议强调，要坚持稳中求进工作总基调，完整、准确、全面贯彻新发展理念。</p>
+      <div style="font-size:12px;color:#868e96;background:#f8f9fa;padding:6px 10px;border-radius:4px;margin:8px 0;display:inline-block">
+        📁 图片已本地化 · /data/images/ 目录
+      </div>
+    </div>
+  </div>
+</div>
+
+<h3>工具栏按钮详情</h3>
+
+<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px">
+  <thead>
+    <tr style="text-align:left;background:#f8f9fa">
+      <th style="padding:10px 12px;border:1px solid #e9ecef">按钮</th>
+      <th style="padding:10px 12px;border:1px solid #e9ecef">功能</th>
+      <th style="padding:10px 12px;border:1px solid #e9ecef">实现方式</th>
+      <th style="padding:10px 12px;border:1px solid #e9ecef">范围</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border:1px solid #e9ecef;font-weight:600">☆ 星标</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef">标记/取消收藏文章</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef">articles 表新增 `starred` 字段 + PATCH API</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef"><span class="tag" style="background:#e7f5ff;color:#1971c2;padding:2px 8px;border-radius:4px">后端</span></td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border:1px solid #e9ecef;font-weight:600">🔄 重新抓取</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef">用原文链接重新拉取内容 + 图片</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef">调用 POST /api/article 接口，更新数据库</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef"><span class="tag" style="background:#e7f5ff;color:#1971c2;padding:2px 8px;border-radius:4px">后端</span></td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border:1px solid #e9ecef;font-weight:600">↗ 原文</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef">新窗口打开微信公众号原文</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef">window.open(article.link)</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef"><span class="tag" style="background:#f1f8f4;color:#40c057;padding:2px 8px;border-radius:4px">纯前端</span></td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border:1px solid #e9ecef;font-weight:600">📄 导出 PDF</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef">将文章导出为 PDF 文件下载</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef">浏览器 window.print() → PDF，或用 jsPDF 库渲染</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef"><span class="tag" style="background:#f1f8f4;color:#40c057;padding:2px 8px;border-radius:4px">纯前端</span></td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border:1px solid #e9ecef;font-weight:600">📦 导出 MD</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef">导出 Markdown 文件 + 图片 zip 打包下载</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef">新增 GET /api/browse/article/{id}/export 后端打包 zip</td>
+      <td style="padding:8px 12px;border:1px solid #e9ecef"><span class="tag" style="background:#fff3cd;color:#fd7e14;padding:2px 8px;border-radius:4px">前后端</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>图片本地化 — 核心改动</h3>
+
+<div class="mockup" style="margin-bottom:20px">
+  <div class="mockup-header">流程对比</div>
+  <div class="mockup-body" style="font-size:13px;line-height:1.8">
+
+<div class="split">
+  <div style="flex:1;padding:14px;background:#fff3cd;border-radius:8px;border:1px solid #ffc078">
+    <strong style="color:#e8590c">❌ 当前方案：代理模式</strong>
+    <pre style="font-size:11px;margin-top:8px;background:#fff;padding:10px;border-radius:4px">
+抓取文章 → HTML 内容存入 DB
+         → 图片 URL 替换为 /api/image?url=...
+         → 每次查看文章实时走代理请求微信 CDN
+    </pre>
+    <ul style="margin-top:8px;padding-left:16px">
+      <li>依赖代理网络稳定性</li>
+      <li>微信 CDN 可能失效</li>
+      <li>每次浏览都重新请求图片</li>
+    </ul>
+  </div>
+  <div style="flex:1;padding:14px;background:#f1f8f4;border-radius:8px;border:1px solid #69db7c">
+    <strong style="color:#2b8a3e">✅ 新方案：本地化存储</strong>
+    <pre style="font-size:11px;margin-top:8px;background:#fff;padding:10px;border-radius:4px">
+抓取文章 → HTML 内容存入 DB
+         → 同时下载所有图片到本地
+           data/images/{article_id}/...
+         → HTML 中图片替换为 /static/images/{article_id}/...
+    </pre>
+    <ul style="margin-top:8px;padding-left:16px">
+      <li>一次抓取，永久可用</li>
+      <li>不依赖微信 CDN</li>
+      <li>支持离线浏览</li>
+      <li>导出时图片已在本地</li>
+    </ul>
+  </div>
+</div>
+
+  </div>
+</div>
+
+<h3>图片本地化后端实现要点</h3>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+  <div style="background:#f8f9fa;padding:14px;border-radius:8px">
+    <strong style="font-size:14px">存储结构</strong>
+    <pre style="font-size:12px;margin-top:8px">data/
+├── rss.db
+├── images/           ← 新增
+│   └── {article_id}/
+│       ├── img_001.jpg
+│       ├── img_002.png
+│       └── ...
+└── exports/          ← 新增(临时)
+    └── {article_id}_export.zip</pre>
+  </div>
+  <div style="background:#f8f9fa;padding:14px;border-radius:8px">
+    <strong style="font-size:14px">改动范围</strong>
+    <ul style="font-size:12px;padding-left:16px;line-height:1.8">
+      <li><code>content_processor.py</code> — 抓取时下载图片+替换路径</li>
+      <li><code>article_fetcher.py</code> — 批量抓取时处理图片</li>
+      <li><code>app.py</code> — 挂载 /static/images 静态目录</li>
+      <li><code>rss_store.py</code> — 新增 star/unstar/re-export 接口</li>
+      <li>新增 <code>routes/export.py</code> — MD+图片 zip 打包</li>
+    </ul>
+  </div>
+</div>
+
+<div style="background:#e7f5ff;padding:14px 18px;border-radius:8px;font-size:13px">
+  <strong>⚠️ 影响评估</strong><br>
+  图片本地化是本次重构中<strong>最大的后端改动</strong>。它穿透了抓取→存储→浏览→导出全链路。建议在实现计划中将此项独立为一个子任务，和前端 UI 重构并行推进。
+</div>

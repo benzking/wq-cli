@@ -331,6 +331,55 @@ def _build_opml_response(subs: list, base_url: str) -> Response:
     )
 
 
+# ── 单个/历史 RSS XML ────────────────────────────────────
+
+@router.get("/rss/{fakeid}", summary="单个公众号 RSS")
+async def get_single_rss_feed(
+    fakeid: str, request: Request,
+    limit: int = Query(RSS_SINGLE_DEFAULT, ge=1, le=RSS_SINGLE_MAX, description="文章数量"),
+):
+    """返回单个公众号的 RSS XML"""
+    base_url = get_base_url(request)
+    articles = rss_store.get_regular_articles(fakeid, limit=limit)
+    if not articles:
+        subs = rss_store.list_subscriptions()
+        nickname_map = {s["fakeid"]: s.get("nickname") or s["fakeid"] for s in subs}
+    else:
+        from utils.image_proxy import proxy_content_images
+        nickname_map = {}
+        for a in articles:
+            nickname_map[a["fakeid"]] = a.get("nickname") or a["fakeid"]
+            if a.get("content"):
+                a["content"] = proxy_content_images(a["content"], base_url)
+    return StreamingResponse(
+        generate_single_rss_stream(articles, nickname_map, base_url),
+        media_type="application/xml; charset=utf-8",
+    )
+
+@router.get("/rss/{fakeid}/history", summary="历史文章 RSS")
+async def get_historical_rss_feed(
+    fakeid: str, request: Request,
+    page: int = Query(1, ge=1, description="页码"),
+    count: int = Query(RSS_HISTORICAL_DEFAULT, ge=1, le=RSS_HISTORICAL_MAX, description="每页数量"),
+):
+    """返回单个公众号历史文章（deep_fetch 来源）的 RSS XML"""
+    base_url = get_base_url(request)
+    sub = rss_store.get_subscription(fakeid)
+    if not sub:
+        raise HTTPException(status_code=404, detail="订阅不存在")
+    total_count = rss_store.count_historical_articles(fakeid)
+    total_pages = max(1, (total_count + count - 1) // count) if total_count else 1
+    offset = (page - 1) * count
+    articles = rss_store.get_historical_articles(fakeid, limit=count, offset=offset)
+    from utils.image_proxy import proxy_content_images
+    for a in articles:
+        if a.get("content"):
+            a["content"] = proxy_content_images(a["content"], base_url)
+    return StreamingResponse(
+        generate_historical_rss_stream(fakeid, sub, articles, base_url, page, total_pages, total_count),
+        media_type="application/xml; charset=utf-8",
+    )
+
 # ── RSS XML 输出 ──────────────────────────────────────────
 
 def _rfc822(ts: int) -> str:

@@ -1,0 +1,155 @@
+<h2>前端架构方案对比：A vs C</h2>
+<p class="subtitle">纯 SPA（原生 JS）vs 轻量框架 CDN（Alpine.js + htmx），从维护性和外观角度深入对比</p>
+
+<div class="split">
+  <div class="mockup" style="flex:1">
+    <div class="mockup-header">方案 A：纯原生 JS SPA</div>
+    <div class="mockup-body" style="padding:16px">
+      <h4 style="margin-bottom:8px;font-size:14px">技术栈</h4>
+      <p style="font-size:13px;color:#495057;margin-bottom:12px">HTML + CSS + 原生 JavaScript（0 外部依赖）</p>
+
+      <h4 style="margin-bottom:8px;font-size:14px">实现方式</h4>
+      <ul style="font-size:13px;color:#495057;padding-left:18px;line-height:1.8">
+        <li>单个 <code>index.html</code>，注册 <code>onhashchange</code> / <code>popstate</code> 实现客户端路由</li>
+        <li>侧边栏、顶栏固定不动，路由变化时替换内容区 DOM</li>
+        <li>每个"页面"是一个 JS 渲染函数，fetch API → 构建 innerHTML</li>
+        <li>组件状态靠手动管理：全局对象 + 事件总线</li>
+      </ul>
+
+      <h4 style="margin-bottom:8px;font-size:14px;margin-top:12px">维护性评分</h4>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+        <div>入门门槛：<span style="color:#40c057">低</span> — 不需要学任何框架</div>
+        <div>代码组织：<span style="color:#fd7e14">中</span> — 需自行约定结构，容易变乱</div>
+        <div>状态管理：<span style="color:#e03131">差</span> — 手动 DOM 操作，分散在各处</div>
+        <div>模板复用：<span style="color:#e03131">差</span> — innerHTML 拼接，无法复用组件</div>
+        <div>数据绑定：<span style="color:#e03131">差</span> — 数据变了要手动更新 DOM</div>
+        <div>长期维护：<span style="color:#fd7e14">中</span> — 小团队可维护，但 JS 会越写越长</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup" style="flex:1">
+    <div class="mockup-header">方案 C：Alpine.js + 后端模板 SPA</div>
+    <div class="mockup-body" style="padding:16px">
+      <h4 style="margin-bottom:8px;font-size:14px">技术栈</h4>
+      <p style="font-size:13px;color:#495057;margin-bottom:12px">Alpine.js (CDN ~20KB) + 可选 htmx (CDN ~14KB) + 原生 CSS</p>
+
+      <h4 style="margin-bottom:8px;font-size:14px">实现方式</h4>
+      <ul style="font-size:13px;color:#495057;padding-left:18px;line-height:1.8">
+        <li>Alpine 提供 <strong>声明式</strong> 数据绑定：<code>x-data</code>, <code>x-show</code>, <code>x-for</code>, <code>@click</code></li>
+        <li>侧边栏状态（展开/折叠、当前路由）用 Alpine 全局 store 管理</li>
+        <li>页面切换用 Alpine 的 <code>x-if</code> + fetch，或 htmx 直接 load HTML 片段</li>
+        <li>组件天然可复用 — <code>x-data</code> 封装了状态 + 模板</li>
+        <li>无需构建工具，CDN 直引，和原生 HTML 一样部署</li>
+      </ul>
+
+      <h4 style="margin-bottom:8px;font-size:14px;margin-top:12px">维护性评分</h4>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+        <div>入门门槛：<span style="color:#40c057">低</span> — 语法贴近 HTML 属性，1 小时上手</div>
+        <div>代码组织：<span style="color:#40c057">好</span> — 数据和模板在一起，一目了然</div>
+        <div>状态管理：<span style="color:#40c057">好</span> — 响应式数据，DOM 自动更新</div>
+        <div>模板复用：<span style="color:#40c057">好</span> — 声明式循环/条件，可抽组件</div>
+        <div>数据绑定：<span style="color:#40c057">好</span> — <code>x-text</code>, <code>x-model</code> 双向绑定</div>
+        <div>长期维护：<span style="color:#40c057">好</span> — 结构化声明式代码，新人易读</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px">
+  <h3 style="margin-bottom:12px">代码量对比（同一功能：带删除按钮的文章列表）</h3>
+  <div class="split">
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header">方案 A：原生 JS</div>
+      <div class="mockup-body">
+        <pre style="font-size:11px;line-height:1.5;background:#f8f9fa;padding:12px;border-radius:6px;overflow:auto"><code>// 状态分散
+let articles = [];
+let loading = false;
+
+// 手动 DOM 操作
+function renderArticles() {
+  const el = document.getElementById('list');
+  el.innerHTML = '';
+  if (loading) {
+    el.innerHTML = '&lt;div class="spinner"&gt;&lt;/div&gt;';
+    return;
+  }
+  articles.forEach((a, i) => {
+    const item = document.createElement('div');
+    item.className = 'article-item';
+    item.innerHTML = `&lt;span&gt;${a.title}&lt;/span&gt;`;
+    const btn = document.createElement('button');
+    btn.textContent = '删除';
+    btn.onclick = () => deleteArticle(i);
+    item.appendChild(btn);
+    el.appendChild(item);
+  });
+}
+
+async function deleteArticle(idx) {
+  articles.splice(idx, 1);
+  renderArticles(); // 重新渲染整个列表
+}
+
+async function load() {
+  loading = true; renderArticles();
+  const res = await fetch('/api/browse/articles');
+  articles = (await res.json()).data.articles;
+  loading = false; renderArticles();
+}
+// 还要处理：错误状态、空状态、
+// 筛选、分页...都需要手动 render</code></pre>
+      </div>
+    </div>
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header">方案 C：Alpine.js</div>
+      <div class="mockup-body">
+        <pre style="font-size:11px;line-height:1.5;background:#f8f9fa;padding:12px;border-radius:6px;overflow:auto"><code>&lt;!-- 状态在 HTML 中声明，一目了然 --&gt;
+&lt;div x-data="articleList()" x-init="load()"&gt;
+  &lt;!-- loading 自动切换 --&gt;
+  &lt;div x-show="loading" class="spinner"&gt;&lt;/div&gt;
+
+  &lt;!-- 空状态自动显示 --&gt;
+  &lt;div x-show="!loading && items.length===0"&gt;
+    暂无文章
+  &lt;/div&gt;
+
+  &lt;!-- 列表声明式渲染，自动响应数据变化 --&gt;
+  &lt;template x-for="(a,i) in items"&gt;
+    &lt;div class="article-item"&gt;
+      &lt;span x-text="a.title"&gt;&lt;/span&gt;
+      &lt;button @click="remove(i)"&gt;删除&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/template&gt;
+&lt;/div&gt;
+
+&lt;script&gt;
+function articleList() {
+  return {
+    items: [], loading: false,
+    async load() {
+      this.loading = true;
+      const r = await fetch('/api/browse/articles');
+      this.items = (await r.json()).data.articles;
+      this.loading = false;
+    },
+    remove(i) { this.items.splice(i, 1); }
+  };
+}
+&lt;/script&gt;</code></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="background:#f1f8f4;padding:14px 18px;border-radius:8px;margin-top:20px;font-size:14px">
+  <strong>🔵 推荐：方案 C（Alpine.js）</strong><br><br>
+  <strong>理由：</strong>
+  <ol style="padding-left:18px;line-height:1.8">
+    <li><strong>零构建工具</strong> — 和当前项目一样只用 CDN，无需 npm/build/打包</li>
+    <li><strong>代码量减少 40-50%</strong> — 声明式绑定消掉了所有手动 innerHTML 和 DOM 操作</li>
+    <li><strong>外观更好</strong> — 响应式渲染让 loading/空状态/错误态切换更流畅，用户体验更无缝</li>
+    <li><strong>维护性强很多</strong> — 新人打开 HTML 就能看懂数据和交互逻辑，不需要追踪全局变量</li>
+    <li><strong>渐进采用</strong> — 可以逐渐从现有页面迁移，无需一次性重写所有页面</li>
+  </ol>
+</div>

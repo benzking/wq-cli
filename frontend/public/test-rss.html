@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>RSS 搜索订阅调试</title>
+<style>
+body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:20px}
+input{padding:10px;width:70%;font-size:16px}
+button{padding:10px 20px;font-size:16px;cursor:pointer}
+.result{background:#f5f5f5;padding:12px;border-radius:6px;margin:8px 0}
+.error{color:red}.ok{color:green}
+</style>
+</head>
+<body>
+<h1>RSS 搜索 + 订阅调试页</h1>
+
+<h3>1. 搜索公众号</h3>
+<input id="query" placeholder="输入公众号名称..." onkeydown="if(event.key==='Enter')search()">
+<button onclick="search()">搜索</button>
+<div id="searchResult"></div>
+
+<h3>2. 直接测试 API</h3>
+<button onclick="testAPI('/api/rss/status')">测试 /api/rss/status</button>
+<button onclick="testAPI('/api/rss/subscriptions')">测试 /api/rss/subscriptions</button>
+<button onclick="testAPI('/api/public/searchbiz?query=%E4%BA%BA%E6%B0%91')">测试 searchbiz</button>
+<button onclick="testImage()">测试 /image</button>
+<div id="apiResult"></div>
+
+<script>
+function log(el, msg, cls) {
+  el.innerHTML += '<div class="result '+cls+'">'+msg+'</div>';
+}
+
+async function search() {
+  const q = document.getElementById('query').value.trim();
+  const el = document.getElementById('searchResult');
+  el.innerHTML = '';
+  if (!q) { el.innerHTML += '<div class="result error">请输入公众号名称</div>'; return; }
+  log(el, '正在搜索: ' + q, '');
+  try {
+    const res = await fetch('/api/public/searchbiz?query=' + encodeURIComponent(q));
+    const data = await res.json();
+    log(el, 'HTTP ' + res.status + ' | ' + JSON.stringify(data).substring(0, 300), res.ok ? 'ok' : 'error');
+    if (data.list && data.list.length) {
+      data.list.forEach(r => {
+        log(el, '找到: ' + r.nickname + ' (' + r.alias + ') fakeid=' + r.fakeid, 'ok');
+      });
+    }
+  } catch(e) {
+    log(el, '请求失败: ' + e.message, 'error');
+  }
+}
+
+async function testAPI(url) {
+  const el = document.getElementById('apiResult');
+  el.innerHTML = '';
+  log(el, '请求: ' + url, '');
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    log(el, 'HTTP ' + res.status + ' | ' + JSON.stringify(data).substring(0, 300), 'ok');
+  } catch(e) {
+    log(el, '请求失败: ' + e.message, 'error');
+  }
+}
+
+async function testImage() {
+  const el = document.getElementById('apiResult');
+  el.innerHTML = '';
+  const url = '/api/image?url=http%3A%2F%2Fmmbiz.qpic.cn%2Ftest.jpg';
+  log(el, '请求: ' + url, '');
+  try {
+    const res = await fetch(url);
+    log(el, 'HTTP ' + res.status, 'ok');
+  } catch(e) {
+    log(el, '请求失败: ' + e.message, 'error');
+  }
+}
+</script>
+</body>
+</html>

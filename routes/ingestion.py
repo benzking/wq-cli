@@ -26,6 +26,19 @@ class IngestionResponse(BaseModel):
     error: Optional[str] = None
 
 
+@router.get("/admin/dashboard", summary="看板数据聚合")
+async def dashboard_stats():
+    try:
+        from utils.auth_manager import auth_manager
+        status = auth_manager.get_status()
+        stats = ingestion_store.get_dashboard_stats()
+        stats["online"] = status.get("authenticated", False)
+        stats["nickname"] = status.get("nickname", "")
+        return {"success": True, "data": stats}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @router.get("/admin/ingestion", summary="查询入库记录")
 async def query_ingestion(
     fakeid: Optional[str] = Query(None, description="按公众号筛选"),

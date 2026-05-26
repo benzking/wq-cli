@@ -9,9 +9,10 @@
 """
 import os
 import logging
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, HTTPException
 from pydantic import BaseModel, Field
 
 from utils import rss_store
@@ -123,4 +124,90 @@ async def browse_subscriptions():
     return BrowseArticlesResponse(
         success=True,
         data={"subscriptions": subs},
+    )
+
+
+@router.patch("/browse/article/{article_id}/star", summary="切换文章星标")
+async def toggle_star(article_id: int):
+    new_state = rss_store.toggle_star(article_id)
+    if new_state is None:
+        return {"success": False, "error": "文章不存在"}
+    return {"success": True, "data": {"starred": new_state}}
+
+
+@router.post("/browse/article/{article_id}/refetch", summary="重新抓取文章")
+async def refetch_article(article_id: int):
+    article = rss_store.get_article_by_id(article_id)
+    if not article:
+        return {"success": False, "error": "文章不存在"}
+    link = article.get("link")
+    if not link:
+        return {"success": False, "error": "文章缺少链接"}
+    import asyncio as _asyncio
+    _asyncio.create_task(_do_refetch(link, article.get("fakeid", "")))
+    return {"success": True, "message": "已加入重抓队列"}
+
+
+async def _do_refetch(link: str, fakeid: str):
+    try:
+        from utils.article_fetcher import fetch_articles_batch
+        from utils.content_processor import process_article_content
+        token = os.getenv("WECHAT_TOKEN", "")
+        cookie = os.getenv("WECHAT_COOKIE", "")
+        results = await fetch_articles_batch([link], max_concurrency=1, timeout=60,
+                                              wechat_token=token, wechat_cookie=cookie)
+        html = results.get(link)
+        if html and not _is_verification(html):
+            processed = process_article_content(html,
+                proxy_base_url=os.getenv("SITE_URL", "http://localhost:5000").rstrip("/"))
+            content = processed.get("content", "")
+            if content and content.strip():
+                rss_store.save_articles(fakeid, [{
+                    "aid": "", "title": "", "link": link,
+                    "digest": "", "cover": "", "author": "",
+                    "publish_time": int(__import__("time").time()),
+                }], source="refetch")
+    except Exception:
+        logger = logging.getLogger(__name__)
+        logger.exception("refetch failed for %s", link)
+
+
+def _is_verification(html: str) -> bool:
+    hl = html.lower()
+    return "verifycode" in hl or "请输入图片中的字符" in html or "环境异常" in html
+
+
+@router.get("/browse/article/{article_id}/export", summary="导出文章 MD + 图片 zip")
+async def export_article(article_id: int, request: Request):
+    import zipfile, io as _io, re as _re
+    from fastapi.responses import StreamingResponse
+
+    article = rss_store.get_article_by_id(article_id)
+    if not article:
+        raise HTTPException(status_code=404, detail="文章不存在")
+
+    content = article.get("content", "") or ""
+    title = article.get("title", "untitled")
+    safe_title = _re.sub(r'[\\/*?:"<>|]', '_', title)
+
+    buf = _io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        md_body = content
+        img_urls = _re.findall(r'src="([^"]+)"', content)
+        for i, url in enumerate(img_urls):
+            fname = f"img_{i+1:03d}.jpg"
+            md_body = md_body.replace(url, f"./{fname}")
+            local_dir = Path(__file__).parent.parent / "data" / "images" / str(article_id)
+            img_path = local_dir / fname
+            if img_path.exists():
+                zf.write(str(img_path), fname)
+
+        md_content = f"# {title}\n\n> 来源: {article.get('nickname', '')} · {article.get('publish_time', '')}\n\n{md_body}"
+        zf.writestr(f"{safe_title}.md", md_content)
+
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{safe_title}.zip"'}
     )

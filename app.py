@@ -14,8 +14,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import asyncio
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -94,8 +95,15 @@ async def lifespan(app: FastAPI):
     from utils.login_reminder import login_reminder
     await login_reminder.start()
 
+    # 启动图片下载 worker
+    from utils.image_downloader import run_image_downloader
+    _dl_stop = asyncio.Event()
+    _dl_task = asyncio.create_task(run_image_downloader(_dl_stop))
+
     yield
 
+    _dl_stop.set()
+    _dl_task.cancel()
     await login_reminder.stop()
     await cf_worker_client.stop()
     await rss_poller.stop()
@@ -163,12 +171,12 @@ async def redoc_html():
 # 静态页面路由
 @app.get("/", include_in_schema=False)
 async def root():
-    """首页 - 重定向到管理页面"""
-    return FileResponse(static_dir / "admin.html")
+    """首页 - SPA"""
+    return FileResponse(static_dir / "index.html")
 
+# 旧静态路由临时保留（前后端并行），待验证后删除
 @app.get("/admin.html", include_in_schema=False)
 async def admin_page():
-    """管理页面"""
     return FileResponse(static_dir / "admin.html")
 
 @app.get("/login.html", include_in_schema=False)
@@ -225,6 +233,31 @@ async def ingestion_page():
 async def backup_page():
     """备份管理页面"""
     return FileResponse(static_dir / "backup.html")
+
+# 独立 HTML 页面（优先于 SPA fallback）
+@app.get("/rss-new.html", include_in_schema=False)
+async def rss_new_page():
+    return FileResponse(static_dir / "rss-new.html")
+
+# 图片代理：兼容不带 /api/ 前缀的旧数据
+@app.get("/image", include_in_schema=False)
+async def image_proxy_no_prefix(url: str = Query(..., description="图片URL")):
+    from routes.image import proxy_image
+    return await proxy_image(url=url)
+
+# SPA fallback: 所有非 /api/、非 /static/、非 /image 路径返回 index.html
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(full_path: str):
+    if full_path.startswith("api/") or full_path.startswith("static/") or full_path.startswith("image"):
+        raise HTTPException(status_code=404)
+    # 检查是否有对应静态文件（如 rss-new.html 等独立页面）
+    candidate = (static_dir / full_path).resolve()
+    if candidate.is_relative_to(static_dir.resolve()) and candidate.exists() and candidate.suffix == ".html":
+        return FileResponse(candidate)
+    index = static_dir / "index.html"
+    if index.exists():
+        return FileResponse(index)
+    raise HTTPException(status_code=404)
 
 if __name__ == "__main__":
     import os

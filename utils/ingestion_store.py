@@ -222,6 +222,54 @@ def get_ingestion_stats() -> Dict:
         conn.close()
 
 
+def get_dashboard_stats() -> dict:
+    """获取看板统计数据"""
+    conn = _get_conn()
+    try:
+        today_start = time.mktime(time.localtime(time.time())[:3] + (0, 0, 0, 0, 0, 0))
+        total_articles = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+        today_ingested = conn.execute(
+            "SELECT COUNT(*) FROM ingestion_logs WHERE status='success' AND created_at >= ?",
+            (today_start,)
+        ).fetchone()[0]
+        today_failed = conn.execute(
+            "SELECT COUNT(*) FROM ingestion_logs WHERE status='failed' AND created_at >= ?",
+            (today_start,)
+        ).fetchone()[0]
+        pending_count = conn.execute(
+            "SELECT COUNT(*) FROM ingestion_logs WHERE status='pending'"
+        ).fetchone()[0]
+        subscription_count = conn.execute(
+            "SELECT COUNT(*) FROM subscriptions"
+        ).fetchone()[0]
+        today_active_accounts = conn.execute(
+            "SELECT COUNT(DISTINCT fakeid) FROM ingestion_logs WHERE created_at >= ?",
+            (today_start,)
+        ).fetchone()[0]
+        ingestion_rate = 0.0
+        t = today_ingested + today_failed
+        if t > 0:
+            ingestion_rate = round(today_ingested / t, 2)
+        recent_failures = conn.execute(
+            "SELECT il.*, s.nickname FROM ingestion_logs il "
+            "LEFT JOIN subscriptions s ON il.fakeid = s.fakeid "
+            "WHERE il.status='failed' "
+            "ORDER BY il.updated_at DESC LIMIT 5"
+        ).fetchall()
+        return {
+            "total_articles": total_articles,
+            "today_ingested": today_ingested,
+            "today_failed": today_failed,
+            "ingestion_rate": ingestion_rate,
+            "subscription_count": subscription_count,
+            "today_active_accounts": today_active_accounts,
+            "pending_count": pending_count,
+            "recent_failures": [dict(r) for r in recent_failures],
+        }
+    finally:
+        conn.close()
+
+
 def get_failed_articles_for_retry(fakeid: Optional[str] = None, limit: int = 50) -> List[Dict]:
     """获取失败的文章链接列表用于重试"""
     conn = _get_conn()

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RSS 订阅管理</title>
+<style>
+:root{--accent:#0c8599;--accent-light:#e3fafc;--error:#c92a2a;--success:#2f9e44}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:PingFang SC,Microsoft YaHei,sans-serif;background:#f8f9fa;color:#212529;font-size:14px;min-height:100vh}
+.layout{max-width:700px;margin:0 auto;padding:24px}
+h1{font-size:22px;margin-bottom:20px}
+h3{font-size:14px;margin-bottom:10px}
+.card{background:#fff;border:1px solid #e9ecef;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+input[type=text]{flex:1;padding:10px 14px;border:1px solid #dee2e6;border-radius:8px;font-size:14px;outline:none;min-width:200px}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-light)}
+.row{display:flex;gap:8px;align-items:center}
+.btn{padding:8px 16px;border:1px solid #dee2e6;border-radius:6px;background:#fff;font-size:13px;cursor:pointer;color:#495057}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{background:#0b7285}
+.btn-danger{color:var(--error);border-color:var(--error)}
+.btn-danger:hover{background:var(--error);color:#fff}
+.btn-sm{padding:4px 8px;font-size:11px}
+.item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #f1f3f5}
+.item:last-child{border-bottom:none}
+.log{background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:12px;margin-top:12px;font-size:12px;font-family:monospace;max-height:300px;overflow-y:auto;white-space:pre-wrap}
+.log .ok{color:var(--success)}.log .err{color:var(--error)}.log .info{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="layout">
+<h1>RSS 订阅管理</h1>
+
+<div class="card">
+  <h3>🔍 搜索并添加微信公众号订阅</h3>
+  <div class="row">
+    <input id="q" type="text" placeholder="输入公众号名称，如：人民日报" onkeydown="if(event.key==='Enter')doSearch()">
+    <button class="btn btn-primary" onclick="doSearch()">搜索</button>
+  </div>
+  <div id="searchOut" style="margin-top:12px"></div>
+</div>
+
+<div class="card">
+  <h3>📡 已订阅</h3>
+  <div id="subOut"></div>
+</div>
+
+<div class="card"><h3>📋 操作日志</h3><div id="log" class="log" style="height:160px"></div></div>
+</div>
+
+<script>
+const L = document.getElementById('log');
+function log(msg, cls) { L.innerHTML += `<span class="${cls||''}">[${new Date().toTimeString().slice(0,8)}] ${msg}</span>\n`; L.scrollTop = L.scrollHeight; }
+
+async function doSearch() {
+  const q = document.getElementById('q').value.trim();
+  const out = document.getElementById('searchOut');
+  out.innerHTML = '';
+  if (!q) { out.innerHTML = '<p style="color:var(--error)">请输入公众号名称</p>'; return; }
+
+  log('📡 搜索: ' + q, 'info');
+  out.innerHTML = '<p>搜索中...</p>';
+
+  try {
+    const url = '/api/public/searchbiz?query=' + encodeURIComponent(q);
+    log('GET ' + url, '');
+    const res = await fetch(url);
+    log('HTTP ' + res.status, res.ok ? 'ok' : 'err');
+    const data = await res.json();
+
+    if (!data.data.list || !data.data.list.length) {
+      out.innerHTML = '<p>未找到匹配的公众号</p>';
+      return;
+    }
+
+    let h = '';
+    data.data.list.forEach(r => {
+      h += `<div class="item">
+        <span><b>${r.nickname||''}</b> <small style="color:#868e96">${r.alias||''}</small></span>
+        <span style="flex:1"></span>
+        <button class="btn btn-sm btn-primary" onclick='doSubscribe("${r.fakeid}")'>订阅</button>
+      </div>`;
+    });
+    out.innerHTML = `<div style="border:1px solid #e9ecef;border-radius:8px;overflow:hidden">${h}</div>`;
+    log(`✅ 找到 ${data.data.list.length} 个公众号`, 'ok');
+  } catch(e) {
+    out.innerHTML = `<p style="color:var(--error)">搜索失败: ${e.message}</p>`;
+    log(`❌ 搜索失败: ${e.message}`, 'err');
+  }
+}
+
+async function doSubscribe(fakeid) {
+  log('➕ 订阅: ' + fakeid, 'info');
+  try {
+    const res = await fetch('/api/rss/subscribe', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({fakeid})
+    });
+    const data = await res.json();
+    if (data.success) { log('✅ 订阅成功','ok'); loadSubs(); }
+    else log('❌ ' + (data.message||data.detail||'订阅失败'), 'err');
+    document.getElementById('searchOut').innerHTML = '';
+    document.getElementById('q').value = '';
+  } catch(e) { log('❌ 网络错误: ' + e.message, 'err'); }
+}
+
+async function doUnsub(fakeid) {
+  log('➖ 取消订阅: ' + fakeid, 'info');
+  try {
+    const res = await fetch('/api/rss/subscribe/' + fakeid, {method:'DELETE'});
+    const data = await res.json();
+    if (data.success) { log('✅ 已取消','ok'); loadSubs(); }
+    else log('❌ ' + (data.message||'取消失败'), 'err');
+  } catch(e) { log('❌ 网络错误: ' + e.message, 'err'); }
+}
+
+async function loadSubs() {
+  log('📋 加载订阅列表', 'info');
+  try {
+    const res = await fetch('/api/rss/subscriptions');
+    const data = await res.json();
+    const subs = data.data || [];
+    const out = document.getElementById('subOut');
+    if (!subs.length) { out.innerHTML = '<p style="color:#868e96">暂无订阅</p>'; return; }
+    let h = '';
+    subs.forEach(s => {
+      h += `<div class="item">
+        <b>${s.nickname||s.alias||s.fakeid}</b>
+        <small style="color:#868e96">${s.article_count||0}篇</small>
+        <span style="flex:1"></span>
+        <button class="btn btn-sm btn-danger" onclick='doUnsub("${s.fakeid}")'>取消</button>
+      </div>`;
+    });
+    out.innerHTML = `<div style="border:1px solid #e9ecef;border-radius:8px;overflow:hidden">${h}</div>`;
+  } catch(e) { log('❌ 加载失败: ' + e.message, 'err'); }
+}
+
+log('🚀 RSS 订阅管理页面已加载', 'ok');
+loadSubs();
+</script>
+</body>
+</html>

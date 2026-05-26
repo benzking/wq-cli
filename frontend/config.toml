@@ -1,0 +1,21 @@
+language = "en"
+
+[log]
+level = "info"
+
+[[projects]]
+name = "wq-cli"
+
+[projects.agent]
+type = "claudecode"
+
+[projects.agent.options]
+work_dir = "/home/gly/wq-cli"
+mode = "default"
+
+[[projects.platforms]]
+type = "feishu"
+
+[projects.platforms.options]
+app_id = "cli_aa9e9cd6a6389bb4"
+app_secret = "3jz2DATvfR5XgZe9775ncgGfFSmiPkex"
