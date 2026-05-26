@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, computed, inject, ref } from 'vue'
 import { useArticles } from '@/composables/useArticles'
+import { List, Star, StarOff, RefreshCw, ExternalLink, FileText, FileDown } from 'lucide-vue-next'
 import SearchInput from '@/components/SearchInput.vue'
 import Pagination from '@/components/Pagination.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -86,7 +87,7 @@ function formatFullDate(ts) {
           :class="!selectedFakeid ? 'bg-accent-light text-accent' : 'hover:bg-accent-light'"
           @click="selectFakeid('')"
         >
-          <span class="text-base shrink-0 w-5 text-center text-text-muted">📋</span>
+          <List :size="16" class="shrink-0 w-5 text-text-muted" />
           <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">全部文章</span>
           <span class="text-[11px] text-text-muted">{{ total }}</span>
         </div>
@@ -99,7 +100,7 @@ function formatFullDate(ts) {
             :class="selectedFakeid === s.fakeid ? 'bg-accent-light text-accent font-semibold' : 'hover:bg-accent-light'"
             @click="selectFakeid(s.fakeid)"
           >
-            <span class="text-base shrink-0 w-5 text-center text-text-muted">{{ s.head_img ? '🖼' : (s.nickname || s.fakeid).charAt(0) }}</span>
+            <span class="text-base shrink-0 w-5 text-center text-text-muted font-semibold">{{ (s.nickname || s.fakeid).charAt(0) }}</span>
             <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{{ s.nickname || s.alias || s.fakeid }}</span>
             <span class="text-[11px] text-text-muted">{{ s.article_count }}</span>
           </div>
@@ -118,7 +119,7 @@ function formatFullDate(ts) {
       </div>
       <div class="flex-1 overflow-y-auto">
         <SkeletonLoader v-if="loading" :lines="6" />
-        <EmptyState v-else-if="articles.length === 0" icon="📭" text="暂无文章" />
+        <EmptyState v-else-if="articles.length === 0" text="暂无文章" />
         <div
           v-for="a in articles"
           :key="a.id"
@@ -146,14 +147,22 @@ function formatFullDate(ts) {
             <span class="bg-bg-secondary py-0.5 px-2 rounded text-[11px]">已抓取</span>
           </div>
           <div class="absolute top-4 right-5 flex gap-1">
-            <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center text-text-secondary transition-colors duration-150 hover:bg-bg-hover hover:text-accent" title="收藏" @click="toggleStar(currentArticle.id)">
-              {{ currentArticle.starred ? '★' : '☆' }}
+            <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center transition-colors duration-150 hover:bg-bg-hover" :class="currentArticle.starred ? 'text-accent' : 'text-text-secondary'" :title="currentArticle.starred ? '取消收藏' : '收藏'" @click="toggleStar(currentArticle.id)">
+              <component :is="currentArticle.starred ? Star : StarOff" :size="14" />
             </button>
-            <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center text-text-secondary transition-colors duration-150 hover:bg-bg-hover hover:text-accent" title="重新抓取" @click="handleRefetch">🔄</button>
+            <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center text-text-secondary transition-colors duration-150 hover:bg-bg-hover hover:text-accent" title="重新抓取" @click="handleRefetch">
+              <RefreshCw :size="14" />
+            </button>
             <span class="w-px bg-border-light mx-1"></span>
-            <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center text-text-secondary transition-colors duration-150 hover:bg-bg-hover hover:text-accent" title="原文" @click="handleOpenOriginal">↗</button>
-            <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center text-text-secondary transition-colors duration-150 hover:bg-bg-hover hover:text-accent" title="导出 PDF" @click="handleExportPDF">📄</button>
-            <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center text-text-secondary transition-colors duration-150 hover:bg-bg-hover hover:text-accent" title="导出 MD" @click="handleExportMD">📦</button>
+            <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center text-text-secondary transition-colors duration-150 hover:bg-bg-hover hover:text-accent" title="原文" @click="handleOpenOriginal">
+              <ExternalLink :size="14" />
+            </button>
+            <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center text-text-secondary transition-colors duration-150 hover:bg-bg-hover hover:text-accent" title="导出 PDF" @click="handleExportPDF">
+              <FileText :size="14" />
+            </button>
+            <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center text-text-secondary transition-colors duration-150 hover:bg-bg-hover hover:text-accent" title="导出 MD" @click="handleExportMD">
+              <FileDown :size="14" />
+            </button>
           </div>
         </div>
         <div class="flex-1 overflow-y-auto py-6 px-7">
@@ -161,7 +170,7 @@ function formatFullDate(ts) {
           <div v-else class="article-content" v-html="currentArticle.content"></div>
         </div>
       </template>
-      <EmptyState v-else icon="📖" text="选择一篇文章开始阅读" />
+      <EmptyState v-else text="选择一篇文章开始阅读" />
     </section>
   </div>
 </template>

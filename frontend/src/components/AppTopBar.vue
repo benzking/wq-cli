@@ -1,5 +1,6 @@
 <script setup>
 import { inject, ref, onMounted, onUnmounted } from 'vue'
+import { PanelLeftOpen, PanelLeftClose } from 'lucide-vue-next'
 
 const collapsed = inject('sidebarCollapsed')
 const toggleSidebar = inject('toggleSidebar')
@@ -29,12 +30,15 @@ onUnmounted(() => { if (_timer) clearInterval(_timer) })
 
 <template>
   <header class="flex items-center justify-between h-12 px-5 bg-bg-primary border-b border-border-light">
-    <button
-      class="border-none bg-none cursor-pointer text-xs text-text-muted px-2 py-1 rounded-sm hover:bg-bg-hover"
-      @click="toggleSidebar"
-    >
-      {{ collapsed ? '▶' : '◀' }}
-    </button>
+    <div class="flex items-center gap-2">
+      <button
+        class="border-none bg-none cursor-pointer text-xs text-text-muted px-2 py-1 rounded-sm hover:bg-bg-hover"
+        @click="toggleSidebar"
+      >
+        <component :is="collapsed ? PanelLeftOpen : PanelLeftClose" :size="14" />
+      </button>
+      <div id="topbar-title"></div>
+    </div>
     <div class="flex items-center gap-3">
       <span
         class="inline-flex items-center gap-1.5 text-xs"

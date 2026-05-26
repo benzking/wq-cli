@@ -38,7 +38,9 @@ function formatTime(ts) { return ts ? new Date(ts * 1000).toLocaleString('zh-CN'
 
 <template>
   <div class="backup-page">
-    <h2 class="page-title">备份管理</h2>
+    <Teleport to="#topbar-title">
+      <h1 class="text-[20px] font-bold text-text-primary">备份管理</h1>
+    </Teleport>
 
     <div class="export-section">
       <button class="btn btn-primary" @click="handleExport" :disabled="exporting">{{ exporting ? '导出中...' : '导出备份' }}</button>
@@ -60,7 +62,7 @@ function formatTime(ts) { return ts ? new Date(ts * 1000).toLocaleString('zh-CN'
     <section class="section">
       <h3>备份历史</h3>
       <SkeletonLoader v-if="loading" :lines="3" />
-      <EmptyState v-else-if="!backups.length" icon="💾" text="暂无备份记录" />
+      <EmptyState v-else-if="!backups.length" text="暂无备份记录" />
       <div v-else class="table-wrap">
         <table>
           <thead><tr><th>文件名</th><th>大小</th><th>日期</th><th>操作</th></tr></thead>

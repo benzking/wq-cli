@@ -27,7 +27,9 @@ const columns = [
 
 <template>
   <div class="logs-page">
-    <h2 class="page-title">系统日志</h2>
+    <Teleport to="#topbar-title">
+      <h1 class="text-[20px] font-bold text-text-primary">系统日志</h1>
+    </Teleport>
 
     <div class="toolbar">
       <select v-model="level" class="filter-select" @change="reset()">

@@ -36,7 +36,7 @@ onMounted(load)
   <div class="flex gap-5 max-sm:flex-col">
     <div class="w-[260px] max-h-[400px] overflow-y-auto border border-border-light rounded-md max-sm:w-full">
       <SkeletonLoader v-if="loading" :lines="5" />
-      <EmptyState v-else-if="!subs.length" icon="📡" text="暂无订阅" />
+      <EmptyState v-else-if="!subs.length" text="暂无订阅" />
       <div
         v-for="s in subs"
         :key="s.fakeid"

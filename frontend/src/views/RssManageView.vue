@@ -75,7 +75,9 @@ function onSearchKeydown(e) {
 
 <template>
   <div class="rss-page">
-    <h2 class="page-title">RSS 订阅管理</h2>
+    <Teleport to="#topbar-title">
+      <h1 class="text-[20px] font-bold text-text-primary">RSS 订阅管理</h1>
+    </Teleport>
 
     <div class="status-bar">
       <div class="status-dot" :class="{ running: pollerStatus.running }">
@@ -117,7 +119,7 @@ function onSearchKeydown(e) {
     <section class="section">
       <h3>已订阅 ({{ subscriptions.length }})</h3>
       <SkeletonLoader v-if="loading" :lines="4" />
-      <EmptyState v-else-if="!subscriptions.length" icon="📡" text="暂无订阅，搜索公众号并添加订阅" />
+      <EmptyState v-else-if="!subscriptions.length" text="暂无订阅，搜索公众号并添加订阅" />
       <div v-else class="sub-grid">
         <div v-for="s in subscriptions" :key="s.fakeid" class="sub-card">
           <div class="sub-card-top">

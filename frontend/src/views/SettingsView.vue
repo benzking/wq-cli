@@ -28,7 +28,9 @@ function switchTab(key) {
 
 <template>
   <div class="settings-page">
-    <h2 class="page-title">设置</h2>
+    <Teleport to="#topbar-title">
+      <h1 class="text-[20px] font-bold text-text-primary">设置</h1>
+    </Teleport>
     <TabsBar :tabs="tabs" :model-value="activeTab" @update:model-value="switchTab" />
 
     <div class="mt-2">

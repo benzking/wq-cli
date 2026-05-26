@@ -16,7 +16,9 @@ function openVerify() {
 
 <template>
   <div class="verify-page">
-    <h2 class="page-title">验证码处理</h2>
+    <Teleport to="#topbar-title">
+      <h1 class="text-[20px] font-bold text-text-primary">验证码处理</h1>
+    </Teleport>
 
     <div class="bg-bg-primary border border-border-light rounded-lg p-[30px] max-w-[600px]">
       <div v-for="(step, idx) in [

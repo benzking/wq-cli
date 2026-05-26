@@ -73,6 +73,12 @@ saas/
 .worktrees/
 worktrees/
 
+# Python cache
+__pycache__/
+
+# Brainstorming 临时文件
+.superpowers/
+
 # 个人文档和脚本（不提交）
 docs/
 scripts/

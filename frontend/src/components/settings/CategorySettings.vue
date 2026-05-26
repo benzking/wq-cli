@@ -72,7 +72,7 @@ onMounted(load)
     <button class="btn btn-primary" @click="create">创建</button>
   </div>
   <SkeletonLoader v-if="loading" :lines="3" />
-  <EmptyState v-else-if="!items.length" icon="📁" text="暂无分类" />
+  <EmptyState v-else-if="!items.length" text="暂无分类" />
   <div v-else class="flex flex-col gap-2">
     <div v-for="c in items" :key="c.id" class="bg-bg-primary border border-border-light rounded-md py-3 px-3.5">
       <div class="flex gap-2.5 items-center mb-2">

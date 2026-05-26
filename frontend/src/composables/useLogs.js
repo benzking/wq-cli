@@ -1,4 +1,4 @@
-import { ref, readonly, computed } from 'vue'
+import { ref, readonly, computed, onUnmounted } from 'vue'
 
 export function useLogs() {
   const logs = ref([])
@@ -46,6 +46,8 @@ export function useLogs() {
     if (val) { _timer = setInterval(loadLogs, 10000) }
     else { if (_timer) clearInterval(_timer); _timer = null }
   }
+
+  onUnmounted(() => { if (_timer) clearInterval(_timer) })
 
   async function cleanupDays(days) {
     await fetch(`/api/admin/logs/cleanup?retain_days=${days}`, { method: 'POST' })

@@ -46,7 +46,9 @@ function formatTime(ts) { return ts ? new Date(ts * 1000).toLocaleString('zh-CN'
 
 <template>
   <div class="ingestion-page">
-    <h2 class="page-title">入库管理</h2>
+    <Teleport to="#topbar-title">
+      <h1 class="text-[20px] font-bold text-text-primary">入库管理</h1>
+    </Teleport>
 
     <div class="stats-row">
       <StatCard label="总计" :value="stats?.total ?? '-'" />

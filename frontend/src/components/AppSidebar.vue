@@ -1,38 +1,54 @@
 <script setup>
 import { inject, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import {
+  LayoutDashboard, BookOpen, Rss, ArrowDownToLine,
+  ScrollText, HardDrive, Settings, QrCode, ShieldCheck,
+} from 'lucide-vue-next'
 
 const collapsed = inject('sidebarCollapsed')
 const route = useRoute()
+
+const iconMap = {
+  dashboard: LayoutDashboard,
+  browse: BookOpen,
+  rss: Rss,
+  ingestion: ArrowDownToLine,
+  logs: ScrollText,
+  backup: HardDrive,
+  settings: Settings,
+  login: QrCode,
+  verify: ShieldCheck,
+}
 
 const groups = [
   {
     label: '概览',
     items: [
-      { icon: '📊', label: '数据看板', to: '/' },
+      { icon: 'dashboard', label: '数据看板', to: '/' },
     ],
   },
   {
     label: '内容',
     items: [
-      { icon: '📖', label: '文章浏览', to: '/browse' },
-      { icon: '📡', label: 'RSS 订阅', to: '/rss' },
+      { icon: 'browse', label: '文章浏览', to: '/browse' },
+      { icon: 'rss', label: 'RSS 订阅', to: '/rss' },
     ],
   },
   {
     label: '管理',
     items: [
-      { icon: '📥', label: '入库管理', to: '/ingestion' },
-      { icon: '📋', label: '系统日志', to: '/logs' },
-      { icon: '💾', label: '备份管理', to: '/backup' },
-      { icon: '⚙️', label: '设置', to: '/settings' },
+      { icon: 'ingestion', label: '入库管理', to: '/ingestion' },
+      { icon: 'logs', label: '系统日志', to: '/logs' },
+      { icon: 'backup', label: '备份管理', to: '/backup' },
+      { icon: 'settings', label: '设置', to: '/settings' },
     ],
   },
   {
     label: '系统',
     items: [
-      { icon: '📱', label: '扫码登录', to: '/login' },
-      { icon: '🔐', label: '验证码处理', to: '/verify' },
+      { icon: 'login', label: '扫码登录', to: '/login' },
+      { icon: 'verify', label: '验证码处理', to: '/verify' },
     ],
   },
 ]
@@ -63,7 +79,7 @@ const isActive = (path) => {
           class="flex items-center gap-2.5 whitespace-nowrap overflow-hidden my-0.5 mx-2 py-2 px-4 rounded-sm text-[13px] text-text-secondary no-underline transition duration-150 hover:bg-accent-light hover:text-accent"
           :class="{ 'bg-accent-light text-accent font-semibold': isActive(item.to) }"
         >
-          <span class="text-base shrink-0">{{ item.icon }}</span>
+          <component :is="iconMap[item.icon]" :size="16" class="shrink-0" />
           <span>{{ item.label }}</span>
         </router-link>
       </div>

@@ -22,7 +22,9 @@ function formatTime(ts) {
 
 <template>
   <div class="dashboard">
-    <h2 class="page-title">数据看板</h2>
+    <Teleport to="#topbar-title">
+      <h1 class="text-[20px] font-bold text-text-primary">数据看板</h1>
+    </Teleport>
 
     <div class="stats-grid">
       <StatCard
@@ -60,7 +62,6 @@ function formatTime(ts) {
 </template>
 
 <style scoped>
-.page-title { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
