@@ -230,6 +230,17 @@ def get_subscription(fakeid: str) -> Optional[Dict]:
         conn.close()
 
 
+def article_exists(fakeid: str, link: str) -> bool:
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM articles WHERE fakeid=? AND link=?", (fakeid, link)
+        ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
 def update_last_poll(fakeid: str):
     conn = _get_conn()
     try:

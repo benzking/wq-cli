@@ -118,22 +118,51 @@ class RSSPoller:
             logger.info("RSS poll: checking %d subscriptions", len(fakeids))
 
         for fakeid in active_fakeids:
+            sub = rss_store.get_subscription(fakeid)
+            nickname = sub.get("nickname", "") if sub else ""
             try:
                 articles = await self._fetch_article_list(fakeid, creds)
-                if articles:
-                    new_count = rss_store.save_articles(fakeid, articles)
-                    logger.info("RSS poll %s: fetched=%d, new=%d, skipped=%d",
-                               fakeid[:12], len(articles), new_count,
-                               len(articles) - new_count)
-                    # 为新文章写入 ingestion_logs，Worker 异步抓取内容
-                    links = [a.get("link", "") for a in articles if a.get("link")]
-                    if links:
-                        log_ingestion_start(fakeid, links, channel="poll")
-                    # 唤醒 Worker
+                if not articles:
+                    logger.info("轮询器 拉取 %s(%s) 返回 0 篇文章", nickname, fakeid[:12])
+                    rss_store.update_last_poll(fakeid)
+                    continue
+
+                logger.info("轮询器 拉取 %s(%s) 最新 %d 篇，开始对比",
+                           nickname, fakeid[:12], len(articles))
+
+                new_count = 0
+                skipped_count = 0
+                new_links = []
+                for a in articles:
+                    title = a.get("title", "")[:40]
+                    link = a.get("link", "")
+                    exists = rss_store.article_exists(fakeid, link)
+                    if exists:
+                        skipped_count += 1
+                        logger.debug("RSS poll[DUPE] fakeid=%s title=%s link=%s",
+                                    fakeid[:12], title[:30], link[:60])
+                        logger.info("轮询器 对比 %s(%s) 的《%s》，已存在",
+                                   nickname, fakeid[:12], title)
+                    else:
+                        new_count += 1
+                        new_links.append(link)
+                        logger.debug("RSS poll[NEW] fakeid=%s title=%s link=%s",
+                                    fakeid[:12], title[:30], link[:60])
+                        logger.info("轮询器 对比 %s(%s) 的《%s》，新文章，加入队列",
+                                   nickname, fakeid[:12], title)
+
+                # 批量保存新文章元数据
+                new_articles = [a for a in articles if a.get("link") in new_links]
+                if new_articles:
+                    rss_store.save_articles(fakeid, new_articles)
+                    log_ingestion_start(fakeid, new_links, channel="poll")
                     from utils.fetch_worker import fetch_worker
                     fetch_worker.wake()
-                else:
-                    logger.info("RSS poll %s: no articles returned", fakeid[:12])
+
+                logger.info("轮询器 %s(%s) 对比结果：获取 %d 篇，新文章 %d 篇，已存在 %d 篇",
+                           nickname, fakeid[:12], len(articles), new_count, skipped_count)
+                logger.debug("RSS poll: fakeid=%s fetched=%d new=%d skipped=%d",
+                            fakeid[:12], len(articles), new_count, skipped_count)
                 rss_store.update_last_poll(fakeid)
             except WechatInvalidFakeidError as e:
                 # [2026-05-18] 同步 SaaS 修复：fakeid 在微信侧已失效，自动加入黑名单
