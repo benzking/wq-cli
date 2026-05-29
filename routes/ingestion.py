@@ -155,3 +155,22 @@ async def revive_fetcher(req: ReviveFetcherRequest):
 async def cleanup_ingestion(retain_days: int = Query(30, ge=1, le=365)):
     deleted = ingestion_store.cleanup_old_ingestion(retain_days=retain_days)
     return {"success": True, "data": {"deleted": deleted, "retain_days": retain_days}}
+
+
+class ToggleArticleRequest(BaseModel):
+    fakeid: str
+    article_link: str
+
+
+@router.post("/admin/ingestion/ban", summary="禁止入库")
+async def ban_ingestion(req: ToggleArticleRequest):
+    ingestion_store.ban_article(req.fakeid, req.article_link)
+    return {"success": True, "message": "已禁止入库"}
+
+
+@router.post("/admin/ingestion/unban", summary="解除禁止入库")
+async def unban_ingestion(req: ToggleArticleRequest):
+    ingestion_store.unban_article(req.fakeid, req.article_link)
+    from utils.fetch_worker import fetch_worker
+    fetch_worker.wake()
+    return {"success": True, "message": "已解除禁止，重新加入队列"}

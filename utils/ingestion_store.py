@@ -196,15 +196,24 @@ def get_ingestion_stats() -> Dict:
     """获取入库统计"""
     conn = _get_conn()
     try:
+        today_start = time.mktime(time.localtime(time.time())[:3] + (0,0,0,0,0,0))
         total = conn.execute("SELECT COUNT(*) FROM ingestion_logs").fetchone()[0]
         success = conn.execute(
             "SELECT COUNT(*) FROM ingestion_logs WHERE status='success'"
         ).fetchone()[0]
         failed = conn.execute(
-            "SELECT COUNT(*) FROM ingestion_logs WHERE status='failed_retryable'"
+            "SELECT COUNT(*) FROM ingestion_logs WHERE status IN ('failed_retryable','failed_permanent')"
         ).fetchone()[0]
         pending = conn.execute(
-            "SELECT COUNT(*) FROM ingestion_logs WHERE status='pending'"
+            "SELECT COUNT(*) FROM ingestion_logs WHERE status IN ('pending','in_progress')"
+        ).fetchone()[0]
+        today_success = conn.execute(
+            "SELECT COUNT(*) FROM ingestion_logs WHERE status='success' AND updated_at >= ?",
+            (today_start,)
+        ).fetchone()[0]
+        today_failed = conn.execute(
+            "SELECT COUNT(*) FROM ingestion_logs WHERE status IN ('failed_retryable','failed_permanent') AND updated_at >= ?",
+            (today_start,)
         ).fetchone()[0]
 
         by_channel = {}
@@ -215,7 +224,7 @@ def get_ingestion_stats() -> Dict:
             by_channel[r["channel"]] = r["cnt"]
 
         recent_failures = conn.execute(
-            "SELECT * FROM ingestion_logs WHERE status='failed_retryable' ORDER BY updated_at DESC LIMIT 10"
+            "SELECT * FROM ingestion_logs WHERE status IN ('failed_retryable','failed_permanent') ORDER BY updated_at DESC LIMIT 10"
         ).fetchall()
 
         return {
@@ -223,6 +232,8 @@ def get_ingestion_stats() -> Dict:
             "success": success,
             "failed": failed,
             "pending": pending,
+            "today_success": today_success,
+            "today_failed": today_failed,
             "by_channel": by_channel,
             "recent_failures": [dict(r) for r in recent_failures],
         }
@@ -310,6 +321,33 @@ def reset_ingestion_status(fakeid: str, link: str):
     finally:
         conn.close()
 
+
+def ban_article(fakeid: str, article_link: str):
+    """标记文章为永久禁止入库"""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE ingestion_logs SET status='failed_permanent', fail_type='manual_banned', updated_at=? "
+            "WHERE fakeid=? AND article_link=?",
+            (time.time(), fakeid, article_link),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def unban_article(fakeid: str, article_link: str):
+    """解除禁止，重置为 pending"""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE ingestion_logs SET status='pending', fail_type='', attempt=0, next_retry_at=0, updated_at=? "
+            "WHERE fakeid=? AND article_link=?",
+            (time.time(), fakeid, article_link),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 def get_next_task() -> Optional[Dict]:
     """Worker 调度查询 — 取一篇待抓取的最早文章"""
