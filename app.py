@@ -81,11 +81,16 @@ async def lifespan(app: FastAPI):
     init_db()
     init_system_logs_table()
     init_ingestion_table()
+    from utils.fetch_logs import init_fetch_logs_table
+    init_fetch_logs_table()
 
     # 将 Python logging 接入 SQLite 日志存储
     _setup_logging()
 
     await rss_poller.start()
+
+    from utils.fetch_worker import fetch_worker
+    await fetch_worker.start()
 
     # 启动 CF Worker 客户端（后台健康探测）
     from utils.cf_worker_client import cf_worker_client
@@ -106,6 +111,7 @@ async def lifespan(app: FastAPI):
     _dl_task.cancel()
     await login_reminder.stop()
     await cf_worker_client.stop()
+    await fetch_worker.stop()
     await rss_poller.stop()
 
 
