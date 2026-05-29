@@ -36,15 +36,49 @@ def _setup_logging():
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     root = logging.getLogger()
-    # 防止 debug 模式下 uvicorn reload 时重复添加 handler
     for h in root.handlers:
         if isinstance(h, SQLiteLogHandler):
             return
-    handler = SQLiteLogHandler()
-    handler.setFormatter(fmt)
-    handler.setLevel(logging.DEBUG)
+
+    # SQLite 日志（全部级别）
+    db_handler = SQLiteLogHandler()
+    db_handler.setFormatter(fmt)
+    db_handler.setLevel(logging.DEBUG)
+    root.addHandler(db_handler)
+
+    # 文件日志（INFO 及以上，每天一个文件 logs/log-YYYY-MM-DD.txt）
+    from datetime import datetime
+    log_dir = Path(__file__).parent / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    class DailyFileHandler(logging.Handler):
+        def __init__(self, log_dir, fmt):
+            super().__init__()
+            self.log_dir = Path(log_dir)
+            self.setFormatter(fmt)
+            self.setLevel(logging.INFO)
+            self._current_date = None
+            self._stream = None
+
+        def _get_path(self):
+            return self.log_dir / f"log-{datetime.now().strftime('%Y-%m-%d')}.txt"
+
+        def emit(self, record):
+            try:
+                today = datetime.now().strftime("%Y-%m-%d")
+                if today != self._current_date:
+                    if self._stream:
+                        self._stream.close()
+                    self._current_date = today
+                    self._stream = open(self._get_path(), "a", encoding="utf-8")
+                self._stream.write(self.format(record) + "\n")
+                self._stream.flush()
+            except Exception:
+                self.handleError(record)
+
+    root.addHandler(DailyFileHandler(log_dir, fmt))
+
     root.setLevel(logging.DEBUG)
-    root.addHandler(handler)
 
 API_DESCRIPTION = """
 微信公众号文章下载 API，支持文章解析、公众号搜索、文章列表获取等功能。
