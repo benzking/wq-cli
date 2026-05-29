@@ -127,8 +127,7 @@ class RSSPoller:
                     articles = await self._enrich_articles_content(fakeid, articles)
 
                 if articles:
-                    # 轮询器拉取的文章标记为 'poll'
-                    new_count = rss_store.save_articles(fakeid, articles, source='poll')
+                    new_count = rss_store.save_articles(fakeid, articles)
                     if new_count > 0:
                         logger.info("RSS: %d new articles for %s", new_count, fakeid[:8])
                     # 记录入库结果

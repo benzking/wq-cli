@@ -38,11 +38,15 @@ def init_ingestion_table():
                 channel     TEXT NOT NULL DEFAULT 'poll',
                 status      TEXT NOT NULL DEFAULT 'pending',
                 error_msg   TEXT NOT NULL DEFAULT '',
+                fail_type   TEXT NOT NULL DEFAULT '',
+                next_retry_at REAL NOT NULL DEFAULT 0.0,
+                fetcher     TEXT NOT NULL DEFAULT '',
                 attempt     INTEGER NOT NULL DEFAULT 0,
                 created_at  REAL NOT NULL,
                 updated_at  REAL NOT NULL,
                 FOREIGN KEY (fakeid) REFERENCES subscriptions(fakeid) ON DELETE CASCADE
             );
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_ingestion_link ON ingestion_logs(fakeid, article_link);
             CREATE INDEX IF NOT EXISTS idx_ingestion_fakeid ON ingestion_logs(fakeid);
             CREATE INDEX IF NOT EXISTS idx_ingestion_status ON ingestion_logs(status);
             CREATE INDEX IF NOT EXISTS idx_ingestion_created ON ingestion_logs(created_at DESC);
@@ -94,13 +98,13 @@ def log_ingestion_result(fakeid: str, link: str, success: bool, error_msg: str =
 
         if existing:
             new_attempt = existing["attempt"] + 1
-            status = "success" if success else "failed"
+            status = "success" if success else "failed_retryable"
             conn.execute(
                 "UPDATE ingestion_logs SET status=?, error_msg=?, attempt=?, updated_at=? WHERE id=?",
                 (status, error_msg, new_attempt, now, existing["id"]),
             )
         else:
-            status = "success" if success else "failed"
+            status = "success" if success else "failed_retryable"
             conn.execute(
                 "INSERT INTO ingestion_logs (fakeid, article_link, channel, status, error_msg, attempt, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
@@ -193,7 +197,7 @@ def get_ingestion_stats() -> Dict:
             "SELECT COUNT(*) FROM ingestion_logs WHERE status='success'"
         ).fetchone()[0]
         failed = conn.execute(
-            "SELECT COUNT(*) FROM ingestion_logs WHERE status='failed'"
+            "SELECT COUNT(*) FROM ingestion_logs WHERE status='failed_retryable'"
         ).fetchone()[0]
         pending = conn.execute(
             "SELECT COUNT(*) FROM ingestion_logs WHERE status='pending'"
@@ -207,7 +211,7 @@ def get_ingestion_stats() -> Dict:
             by_channel[r["channel"]] = r["cnt"]
 
         recent_failures = conn.execute(
-            "SELECT * FROM ingestion_logs WHERE status='failed' ORDER BY updated_at DESC LIMIT 10"
+            "SELECT * FROM ingestion_logs WHERE status='failed_retryable' ORDER BY updated_at DESC LIMIT 10"
         ).fetchall()
 
         return {
@@ -233,7 +237,7 @@ def get_dashboard_stats() -> dict:
             (today_start,)
         ).fetchone()[0]
         today_failed = conn.execute(
-            "SELECT COUNT(*) FROM ingestion_logs WHERE status='failed' AND created_at >= ?",
+            "SELECT COUNT(*) FROM ingestion_logs WHERE status='failed_retryable' AND created_at >= ?",
             (today_start,)
         ).fetchone()[0]
         pending_count = conn.execute(
@@ -253,7 +257,7 @@ def get_dashboard_stats() -> dict:
         recent_failures = conn.execute(
             "SELECT il.*, s.nickname FROM ingestion_logs il "
             "LEFT JOIN subscriptions s ON il.fakeid = s.fakeid "
-            "WHERE il.status='failed' "
+            "WHERE il.status='failed_retryable' "
             "ORDER BY il.updated_at DESC LIMIT 5"
         ).fetchall()
         return {
@@ -277,13 +281,13 @@ def get_failed_articles_for_retry(fakeid: Optional[str] = None, limit: int = 50)
         if fakeid:
             rows = conn.execute(
                 "SELECT DISTINCT fakeid, article_link, channel FROM ingestion_logs "
-                "WHERE status='failed' AND fakeid=? ORDER BY updated_at DESC LIMIT ?",
+                "WHERE status='failed_retryable' AND fakeid=? ORDER BY updated_at DESC LIMIT ?",
                 (fakeid, limit),
             ).fetchall()
         else:
             rows = conn.execute(
                 "SELECT DISTINCT fakeid, article_link, channel FROM ingestion_logs "
-                "WHERE status='failed' ORDER BY updated_at DESC LIMIT ?",
+                "WHERE status='failed_retryable' ORDER BY updated_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
