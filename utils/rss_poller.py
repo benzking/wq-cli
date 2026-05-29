@@ -122,8 +122,9 @@ class RSSPoller:
                 articles = await self._fetch_article_list(fakeid, creds)
                 if articles:
                     new_count = rss_store.save_articles(fakeid, articles)
-                    if new_count > 0:
-                        logger.info("RSS: %d new articles for %s", new_count, fakeid[:8])
+                    logger.info("RSS poll %s: fetched=%d, new=%d, skipped=%d",
+                               fakeid[:12], len(articles), new_count,
+                               len(articles) - new_count)
                     # 为新文章写入 ingestion_logs，Worker 异步抓取内容
                     links = [a.get("link", "") for a in articles if a.get("link")]
                     if links:
@@ -131,6 +132,8 @@ class RSSPoller:
                     # 唤醒 Worker
                     from utils.fetch_worker import fetch_worker
                     fetch_worker.wake()
+                else:
+                    logger.info("RSS poll %s: no articles returned", fakeid[:12])
                 rss_store.update_last_poll(fakeid)
             except WechatInvalidFakeidError as e:
                 # [2026-05-18] 同步 SaaS 修复：fakeid 在微信侧已失效，自动加入黑名单
