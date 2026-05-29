@@ -59,12 +59,15 @@ def _setup_logging():
             self.setLevel(logging.INFO)
             self._current_date = None
             self._stream = None
+            self._open_failed = False
 
         def _get_path(self):
             return self.log_dir / f"log-{datetime.now().strftime('%Y-%m-%d')}.txt"
 
         def emit(self, record):
             try:
+                if self._open_failed:
+                    return
                 today = datetime.now().strftime("%Y-%m-%d")
                 if today != self._current_date:
                     if self._stream:
@@ -73,6 +76,8 @@ def _setup_logging():
                     self._stream = open(self._get_path(), "a", encoding="utf-8")
                 self._stream.write(self.format(record) + "\n")
                 self._stream.flush()
+            except PermissionError:
+                self._open_failed = True
             except Exception:
                 self.handleError(record)
 
