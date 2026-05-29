@@ -20,9 +20,7 @@ import httpx
 
 from utils.auth_manager import auth_manager
 from utils import rss_store
-from utils.helpers import extract_article_info, parse_article_url, is_image_text_message, has_article_content, is_article_unavailable, get_unavailable_reason
-from utils.ingestion_store import log_ingestion_result, init_ingestion_table
-from utils.http_client import fetch_page
+from utils.ingestion_store import log_ingestion_start
 
 logger = logging.getLogger(__name__)
 
@@ -122,25 +120,17 @@ class RSSPoller:
         for fakeid in active_fakeids:
             try:
                 articles = await self._fetch_article_list(fakeid, creds)
-                if articles and FETCH_FULL_CONTENT:
-                    # 获取完整文章内容
-                    articles = await self._enrich_articles_content(fakeid, articles)
-
                 if articles:
-                    # 轮询器拉取的文章标记为 'poll'
-                    new_count = rss_store.save_articles(fakeid, articles, source='poll')
+                    new_count = rss_store.save_articles(fakeid, articles)
                     if new_count > 0:
                         logger.info("RSS: %d new articles for %s", new_count, fakeid[:8])
-                    # 记录入库结果
-                    for a in articles:
-                        link = a.get("link", "")
-                        content = a.get("content", "")
-                        success = bool(content and content.strip())
-                        log_ingestion_result(
-                            fakeid, link, success,
-                            error_msg="" if success else "empty content",
-                            channel="poll",
-                        )
+                    # 为新文章写入 ingestion_logs，Worker 异步抓取内容
+                    links = [a.get("link", "") for a in articles if a.get("link")]
+                    if links:
+                        log_ingestion_start(fakeid, links, channel="poll")
+                    # 唤醒 Worker
+                    from utils.fetch_worker import fetch_worker
+                    fetch_worker.wake()
                 rss_store.update_last_poll(fakeid)
             except WechatInvalidFakeidError as e:
                 # [2026-05-18] 同步 SaaS 修复：fakeid 在微信侧已失效，自动加入黑名单
@@ -252,124 +242,4 @@ class RSSPoller:
         """手动触发一次轮询"""
         await self._poll_all()
     
-    async def _enrich_articles_content(self, fakeid: str, articles: List[Dict]) -> List[Dict]:
-        """
-        批量获取文章完整内容（并发版）
-        
-        限制：最多获取 20 篇文章的完整内容（避免大量文章导致轮询过久）
-        
-        Args:
-            articles: 文章列表（包含基本信息）
-            
-        Returns:
-            enriched_articles: 包含完整内容的文章列表
-        """
-        from utils.article_fetcher import fetch_articles_batch
-        from utils.content_processor import process_article_content
-        
-        # 提取所有文章链接
-        article_links = [a.get("link", "") for a in articles if a.get("link")]
-        
-        if not article_links:
-            return articles
-        
-        # 限制最多获取 20 篇（5个批次可能返回100+篇）
-        max_fetch = 20
-        if len(article_links) > max_fetch:
-            logger.info("文章数 %d 篇超过限制，仅获取最近 %d 篇的完整内容", 
-                       len(article_links), max_fetch)
-            article_links = article_links[:max_fetch]
-            articles = articles[:max_fetch]
-        
-        import secrets
-        tid = secrets.token_hex(4)
-        logger.info("[Poll %s] fetching full content for %d articles", tid, len(article_links))
-
-        # 获取微信凭证（从环境变量读取）
-        wechat_token = os.getenv("WECHAT_TOKEN", "")
-        wechat_cookie = os.getenv("WECHAT_COOKIE", "")
-        
-        results = await fetch_articles_batch(
-            article_links, 
-            max_concurrency=3, 
-            timeout=60,
-            wechat_token=wechat_token,
-            wechat_cookie=wechat_cookie
-        )
-        
-        # 处理结果并合并到原文章数据
-        enriched = []
-        for article in articles:
-            link = article.get("link", "")
-            if not link:
-                enriched.append(article)
-                continue
-            
-            html = results.get(link)
-            if not html:
-                logger.warning("Empty HTML: %s", link[:80])
-                enriched.append(article)
-                continue
-            
-            # [2026-05-18] 精确化验证码检测（之前用 "验证" 二字误伤大量正文含此字的文章）
-            # 微信风控页特有标记：
-            #   1. verifycode 出现在 URL/form/script 中（最强信号）
-            #   2. "请输入图片中的字符" — 微信原版验证码提示文案
-            #   3. "环境异常" — 微信明确风控提示（保留原检测）
-            # 移除单纯的"验证"二字判断 — 文章正文里出现概率高，会导致 content 丢失
-            html_lower = html.lower()
-            verification_markers = (
-                "verifycode" in html_lower
-                or "请输入图片中的字符" in html
-                or "环境异常" in html
-            )
-            if verification_markers:
-                sub = rss_store.get_subscription(fakeid)
-                nickname = sub.get("nickname", "") if sub else ""
-                count = rss_store.increment_verification_count(fakeid, nickname)
-                logger.warning("Verification triggered for %s (count=%d): %s",
-                             fakeid[:8], count, link[:60])
-                enriched.append(article)
-                continue
-            
-            if is_article_unavailable(html):
-                reason = get_unavailable_reason(html) or "unknown"
-                logger.warning("Article permanently unavailable (%s): %s", reason, link[:80])
-                article["content"] = f"<p>[unavailable] {reason}</p>"
-                article["plain_content"] = f"[unavailable] {reason}"
-                enriched.append(article)
-                continue
-            if not has_article_content(html):
-                logger.warning("No content in HTML: %s", link[:80])
-                enriched.append(article)
-                continue
-            
-            try:
-                # 使用 content_processor 处理文章内容（完美保持图文顺序）
-                # 从环境变量读取网站URL,入库时代理图片(与SaaS版策略一致)
-                site_url = os.getenv("SITE_URL", "http://localhost:5000").rstrip("/")
-                result = process_article_content(html, proxy_base_url=site_url)
-                
-                # 合并到原文章数据
-                article["content"] = result.get("content", "")
-                article["plain_content"] = result.get("plain_content", "")
-                
-                # 如果原始数据没有作者，从 HTML 中提取
-                if not article.get("author"):
-                    from utils.helpers import extract_article_info, parse_article_url
-                    article_info = extract_article_info(html, parse_article_url(link))
-                    article["author"] = article_info.get("author", "")
-                
-                logger.info("Content fetched: %s... (%d chars, %d images)",
-                           link[:50],
-                           len(article["content"]), 
-                           len(result.get("images", [])))
-            except Exception as e:
-                logger.error("Failed to process content for %s: %s", link[:80], str(e))
-            
-            enriched.append(article)
-        
-        return enriched
-
-
 rss_poller = RSSPoller()

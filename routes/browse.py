@@ -166,7 +166,7 @@ async def _do_refetch(link: str, fakeid: str):
                     "aid": "", "title": "", "link": link,
                     "digest": "", "cover": "", "author": "",
                     "publish_time": int(__import__("time").time()),
-                }], source="refetch")
+                }])
     except Exception:
         logger = logging.getLogger(__name__)
         logger.exception("refetch failed for %s", link)

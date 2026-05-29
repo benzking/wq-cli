@@ -449,8 +449,8 @@ async def _fetch_history_internal(fakeid: str, target_count: int) -> tuple:
     # 截取到目标数量
     historical_articles = historical_articles[:target_count]
     
-    # 保存到数据库（去重），标记为历史文章 'deep_fetch'
-    new_count = rss_store.save_articles(fakeid, historical_articles, source='deep_fetch')
+    # 保存到数据库（去重）
+    new_count = rss_store.save_articles(fakeid, historical_articles)
     
     return len(historical_articles), new_count
 

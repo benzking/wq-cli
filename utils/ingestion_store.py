@@ -38,11 +38,15 @@ def init_ingestion_table():
                 channel     TEXT NOT NULL DEFAULT 'poll',
                 status      TEXT NOT NULL DEFAULT 'pending',
                 error_msg   TEXT NOT NULL DEFAULT '',
+                fail_type   TEXT NOT NULL DEFAULT '',
+                next_retry_at REAL NOT NULL DEFAULT 0.0,
+                fetcher     TEXT NOT NULL DEFAULT '',
                 attempt     INTEGER NOT NULL DEFAULT 0,
                 created_at  REAL NOT NULL,
                 updated_at  REAL NOT NULL,
                 FOREIGN KEY (fakeid) REFERENCES subscriptions(fakeid) ON DELETE CASCADE
             );
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_ingestion_link ON ingestion_logs(fakeid, article_link);
             CREATE INDEX IF NOT EXISTS idx_ingestion_fakeid ON ingestion_logs(fakeid);
             CREATE INDEX IF NOT EXISTS idx_ingestion_status ON ingestion_logs(status);
             CREATE INDEX IF NOT EXISTS idx_ingestion_created ON ingestion_logs(created_at DESC);
@@ -94,13 +98,13 @@ def log_ingestion_result(fakeid: str, link: str, success: bool, error_msg: str =
 
         if existing:
             new_attempt = existing["attempt"] + 1
-            status = "success" if success else "failed"
+            status = "success" if success else "failed_retryable"
             conn.execute(
                 "UPDATE ingestion_logs SET status=?, error_msg=?, attempt=?, updated_at=? WHERE id=?",
                 (status, error_msg, new_attempt, now, existing["id"]),
             )
         else:
-            status = "success" if success else "failed"
+            status = "success" if success else "failed_retryable"
             conn.execute(
                 "INSERT INTO ingestion_logs (fakeid, article_link, channel, status, error_msg, attempt, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
@@ -141,8 +145,12 @@ def query_ingestion(fakeid: Optional[str] = None, status: Optional[str] = None,
         params.extend([per_page, offset])
 
         rows = conn.execute(
-            f"SELECT i.*, s.nickname FROM ingestion_logs i "
+            f"SELECT i.*, s.nickname, a.title AS article_title, "
+            f"a.digest, a.cover, a.publish_time "
+            f"FROM ingestion_logs i "
             f"LEFT JOIN subscriptions s ON i.fakeid = s.fakeid "
+            f"LEFT JOIN articles a ON i.fakeid = a.fakeid "
+            f"  AND i.article_link = a.link "
             f"WHERE {where} ORDER BY i.updated_at DESC LIMIT ? OFFSET ?",
             params,
         ).fetchall()
@@ -193,7 +201,7 @@ def get_ingestion_stats() -> Dict:
             "SELECT COUNT(*) FROM ingestion_logs WHERE status='success'"
         ).fetchone()[0]
         failed = conn.execute(
-            "SELECT COUNT(*) FROM ingestion_logs WHERE status='failed'"
+            "SELECT COUNT(*) FROM ingestion_logs WHERE status='failed_retryable'"
         ).fetchone()[0]
         pending = conn.execute(
             "SELECT COUNT(*) FROM ingestion_logs WHERE status='pending'"
@@ -207,7 +215,7 @@ def get_ingestion_stats() -> Dict:
             by_channel[r["channel"]] = r["cnt"]
 
         recent_failures = conn.execute(
-            "SELECT * FROM ingestion_logs WHERE status='failed' ORDER BY updated_at DESC LIMIT 10"
+            "SELECT * FROM ingestion_logs WHERE status='failed_retryable' ORDER BY updated_at DESC LIMIT 10"
         ).fetchall()
 
         return {
@@ -233,7 +241,7 @@ def get_dashboard_stats() -> dict:
             (today_start,)
         ).fetchone()[0]
         today_failed = conn.execute(
-            "SELECT COUNT(*) FROM ingestion_logs WHERE status='failed' AND created_at >= ?",
+            "SELECT COUNT(*) FROM ingestion_logs WHERE status='failed_retryable' AND created_at >= ?",
             (today_start,)
         ).fetchone()[0]
         pending_count = conn.execute(
@@ -253,7 +261,7 @@ def get_dashboard_stats() -> dict:
         recent_failures = conn.execute(
             "SELECT il.*, s.nickname FROM ingestion_logs il "
             "LEFT JOIN subscriptions s ON il.fakeid = s.fakeid "
-            "WHERE il.status='failed' "
+            "WHERE il.status='failed_retryable' "
             "ORDER BY il.updated_at DESC LIMIT 5"
         ).fetchall()
         return {
@@ -277,13 +285,13 @@ def get_failed_articles_for_retry(fakeid: Optional[str] = None, limit: int = 50)
         if fakeid:
             rows = conn.execute(
                 "SELECT DISTINCT fakeid, article_link, channel FROM ingestion_logs "
-                "WHERE status='failed' AND fakeid=? ORDER BY updated_at DESC LIMIT ?",
+                "WHERE status='failed_retryable' AND fakeid=? ORDER BY updated_at DESC LIMIT ?",
                 (fakeid, limit),
             ).fetchall()
         else:
             rows = conn.execute(
                 "SELECT DISTINCT fakeid, article_link, channel FROM ingestion_logs "
-                "WHERE status='failed' ORDER BY updated_at DESC LIMIT ?",
+                "WHERE status='failed_retryable' ORDER BY updated_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
@@ -299,6 +307,134 @@ def reset_ingestion_status(fakeid: str, link: str):
             (time.time(), fakeid, link),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def get_next_task() -> Optional[Dict]:
+    """Worker 调度查询 — 取一篇待抓取的最早文章"""
+    conn = _get_conn()
+    try:
+        now = time.time()
+        row = conn.execute(
+            "SELECT * FROM ingestion_logs "
+            "WHERE status IN ('pending', 'failed_retryable') "
+            "  AND next_retry_at <= ? "
+            "ORDER BY "
+            "  CASE channel WHEN 'poll' THEN 0 WHEN 'manual' THEN 1 "
+            "    WHEN 'deep_fetch' THEN 2 END, "
+            "  next_retry_at ASC "
+            "LIMIT 1",
+            (now,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def set_in_progress(fakeid: str, article_link: str):
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE ingestion_logs SET status='in_progress', updated_at=? "
+            "WHERE fakeid=? AND article_link=?",
+            (time.time(), fakeid, article_link),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def mark_success(fakeid: str, article_link: str):
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE ingestion_logs SET status='success', fail_type='', "
+            "attempt=attempt+1, updated_at=? "
+            "WHERE fakeid=? AND article_link=?",
+            (time.time(), fakeid, article_link),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def mark_failure(fakeid: str, article_link: str, fail_type: str,
+                 next_retry_at: float, is_permanent: bool = False):
+    conn = _get_conn()
+    try:
+        status = "failed_permanent" if is_permanent else "failed_retryable"
+        conn.execute(
+            "UPDATE ingestion_logs SET status=?, fail_type=?, "
+            "attempt=attempt+1, next_retry_at=?, updated_at=? "
+            "WHERE fakeid=? AND article_link=?",
+            (status, fail_type, next_retry_at, time.time(), fakeid, article_link),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def reset_for_retry(fakeid: str, article_link: str, fetcher: str = ""):
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE ingestion_logs SET status='pending', fail_type='', "
+            "attempt=0, next_retry_at=0, fetcher=?, updated_at=? "
+            "WHERE fakeid=? AND article_link=?",
+            (fetcher, time.time(), fakeid, article_link),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def recover_stalled_in_progress(timeout_minutes: int = 15) -> int:
+    conn = _get_conn()
+    try:
+        cutoff = time.time() - timeout_minutes * 60
+        rows = conn.execute(
+            "SELECT fakeid, article_link FROM ingestion_logs "
+            "WHERE status='in_progress' AND updated_at < ?",
+            (cutoff,),
+        ).fetchall()
+        count = 0
+        for r in rows:
+            conn.execute(
+                "UPDATE ingestion_logs SET status='failed_retryable', "
+                "fail_type='network_error', updated_at=? "
+                "WHERE fakeid=? AND article_link=?",
+                (time.time(), r["fakeid"], r["article_link"]),
+            )
+            count += 1
+        conn.commit()
+        return count
+    finally:
+        conn.close()
+
+
+def extend_retry(fakeid: str, article_link: str, seconds: int = 30):
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE ingestion_logs SET next_retry_at=?, updated_at=? "
+            "WHERE fakeid=? AND article_link=?",
+            (time.time() + seconds, time.time(), fakeid, article_link),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def pending_count() -> int:
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM ingestion_logs "
+            "WHERE status IN ('pending', 'failed_retryable') AND next_retry_at <= ?",
+            (time.time(),),
+        ).fetchone()
+        return row["cnt"] if row else 0
     finally:
         conn.close()
 

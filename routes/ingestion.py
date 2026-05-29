@@ -77,59 +77,78 @@ class RetryRequest(BaseModel):
     fakeid: Optional[str] = None
     article_links: Optional[List[str]] = None
     limit: int = Field(10, ge=1, le=50, description="一次最多重试数量")
+    fetcher: Optional[str] = None
 
 
 @router.post("/admin/ingestion/retry", summary="重试失败的入库")
 async def retry_ingestion(req: RetryRequest):
     if req.article_links:
         links = req.article_links
-        # 标记为 pending 并重置
         for link in links:
             fid = req.fakeid or ""
-            ingestion_store.reset_ingestion_status(fid, link)
+            ingestion_store.reset_for_retry(fid, link, fetcher=req.fetcher or "")
     else:
-        failed = ingestion_store.get_failed_articles_for_retry(fakeid=req.fakeid, limit=req.limit)
-        links = [f["article_link"] for f in failed if f.get("article_link")]
-        for f in failed:
-            ingestion_store.reset_ingestion_status(f["fakeid"], f["article_link"])
-
-    # 异步抓取这些链接
-    try:
-        retry_count = 0
-        if links:
-            from utils.article_fetcher import fetch_articles_batch
-            import os
-            token = os.getenv("WECHAT_TOKEN", "")
-            cookie = os.getenv("WECHAT_COOKIE", "")
-            results = await fetch_articles_batch(links, max_concurrency=3, timeout=60, wechat_token=token, wechat_cookie=cookie)
-            from utils.content_processor import process_article_content
-            site_url = os.getenv("SITE_URL", "http://localhost:5000").rstrip("/")
-
-            for link, html in results.items():
-                if html and not _is_verification(html):
-                    processed = process_article_content(html, proxy_base_url=site_url)
-                    content = processed.get("content", "")
-                    # 尝试保存
-                    fid = req.fakeid or ""
-                    success = bool(content and content.strip())
-                    ingestion_store.log_ingestion_result(
-                        fid, link, success,
-                        error_msg="" if success else "empty content",
-                    )
-                    if success:
-                        retry_count += 1
-
-        return IngestionResponse(
-            success=True,
-            data={"retried": retry_count, "links": len(links)},
+        failed = ingestion_store.get_failed_articles_for_retry(
+            fakeid=req.fakeid, limit=req.limit,
         )
-    except Exception as e:
-        return IngestionResponse(success=False, error=str(e))
+        for f in failed:
+            ingestion_store.reset_for_retry(
+                f["fakeid"], f["article_link"], fetcher=req.fetcher or "",
+            )
+        links = [f["article_link"] for f in failed if f.get("article_link")]
+
+    from utils.fetch_worker import fetch_worker
+    fetch_worker.wake()
+    return IngestionResponse(
+        success=True,
+        data={"retried": len(links) if req.article_links else len(links)},
+    )
 
 
-def _is_verification(html: str) -> bool:
-    hl = html.lower()
-    return "verifycode" in hl or "请输入图片中的字符" in html or "环境异常" in html
+@router.get("/admin/ingestion/worker-status", summary="Worker 运行状态")
+async def worker_status():
+    from utils.fetch_worker import fetch_worker
+    from utils.ingestion_store import pending_count
+    from utils.fetch_router import fetcher_router
+    return {
+        "success": True,
+        "data": {
+            "running": fetch_worker.is_running,
+            "paused": fetch_worker.is_paused,
+            "pending_count": pending_count(),
+            "fetchers": fetcher_router.all_status(),
+        },
+    }
+
+
+@router.post("/admin/ingestion/worker/trigger", summary="手动唤醒 Worker")
+async def worker_trigger():
+    from utils.fetch_worker import fetch_worker
+    fetch_worker.wake()
+    return {"success": True, "message": "Worker awoken"}
+
+
+@router.post("/admin/ingestion/worker/pause", summary="切换 Worker 暂停状态")
+async def worker_pause():
+    from utils.fetch_worker import fetch_worker
+    paused = await fetch_worker.toggle_pause()
+    return {
+        "success": True,
+        "data": {"paused": paused},
+        "message": "Worker paused" if paused else "Worker resumed",
+    }
+
+
+class ReviveFetcherRequest(BaseModel):
+    fetcher_name: str
+
+
+@router.post("/admin/ingestion/worker/revive-fetcher",
+             summary="手动启用已 dead 渠道")
+async def revive_fetcher(req: ReviveFetcherRequest):
+    from utils.fetch_router import fetcher_router
+    fetcher_router.revive_fetcher(req.fetcher_name)
+    return {"success": True, "message": f"Fetcher {req.fetcher_name} revived"}
 
 
 @router.post("/admin/ingestion/cleanup", summary="清理旧入库记录")
