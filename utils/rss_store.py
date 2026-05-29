@@ -120,7 +120,10 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_subscriptions_category ON subscriptions(category_id);
     """)
     conn.commit()
-    
+
+    # 检查并添加后续新增的列
+    cursor = conn.execute("PRAGMA table_info(articles)")
+    columns = [row[1] for row in cursor.fetchall()]
     if "starred" not in columns:
         logger.info("Adding starred column to articles table")
         conn.execute("ALTER TABLE articles ADD COLUMN starred INTEGER NOT NULL DEFAULT 0")
