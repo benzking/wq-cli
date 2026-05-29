@@ -105,6 +105,16 @@ class FetchWorker:
 
     async def _loop(self):
         while self._running:
+            try:
+                await self._do_cycle()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error("Worker cycle crashed: %s", e, exc_info=True)
+                await asyncio.sleep(10)
+
+    async def _do_cycle(self):
+        while self._running:
             cfg = _load_config()
 
             # 渠道配置刷新
