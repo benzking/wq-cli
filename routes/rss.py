@@ -220,6 +220,9 @@ async def poller_status():
             "running": rss_poller.is_running,
             "poll_interval": POLL_INTERVAL,
             "subscription_count": len(subs),
+            "consecutive_failures": getattr(rss_poller, 'consecutive_failures', 0),
+            "last_fail_time": getattr(rss_poller, 'last_fail_time', None),
+            "last_fail_msg": getattr(rss_poller, 'last_fail_msg', None),
         },
     )
 

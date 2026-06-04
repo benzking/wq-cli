@@ -70,8 +70,11 @@ class LoginResponse(BaseModel):
     success: bool
     message: str
 
+class SessionRequest(BaseModel):
+    fakeid: Optional[str] = None
+
 @router.post("/session/{sessionid}", summary="初始化登录会话", include_in_schema=True)
-async def create_session(sessionid: str, request: Request):
+async def create_session(sessionid: str, request: Request, body: Optional[SessionRequest] = None):
     """
     初始化登录会话，必须在获取二维码之前调用。
 
@@ -106,7 +109,8 @@ async def create_session(sessionid: str, request: Request):
         # 存储session
         _sessions[sessionid] = {
             "created_at": time.time(),
-            "status": "created"
+            "status": "created",
+            "fakeid": body.fakeid if body else None,
         }
         
         data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {"base_resp": {"ret": 0}}
@@ -374,7 +378,7 @@ async def biz_login(request: Request):
         
         # 解析响应
         result = response.json()
-        
+
         print(f"[INFO] Bizlogin响应: base_resp.ret={result.get('base_resp', {}).get('ret')}")
         
         # 检查登录是否成功
@@ -424,81 +428,122 @@ async def biz_login(request: Request):
         
         cookie_str = "; ".join([f"{k}={v}" for k, v in cookies.items()])
         
+        # 从 session 获取 fakeid（重新扫码场景）
+        # 取最近创建的带 fakeid 的活跃 session（5 分钟内有效）
+        session_fakeid = None
+        now = time.time()
+        for sid, sdata in sorted(
+            _sessions.items(), key=lambda x: x[1].get("created_at", 0), reverse=True
+        ):
+            if sdata.get("fakeid") and (now - sdata["created_at"]) < 300:
+                session_fakeid = sdata["fakeid"]
+                break
+
         # 获取公众号信息和FakeID（使用同一个客户端）
         common_headers = {
             "Cookie": cookie_str,
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
-        
+
         nickname = "公众号"
         fakeid = ""
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # 第一步：获取公众号昵称
-            info_response = await client.get(
-                f"{MP_BASE_URL}/cgi-bin/home",
-                params={"t": "home/index", "token": token, "lang": "zh_CN"},
-                headers=common_headers
-            )
-            
-            html = info_response.text
-            import re
-            nick_match = re.search(r'nick_name\s*[:=]\s*["\']([^"\']+)["\']', html)
-            if nick_match:
-                nickname = nick_match.group(1)
-            
-            # 第二步：通过昵称搜索获取FakeID
-            print(f"[SEARCH] 开始获取FakeID，昵称: {nickname}")
-            
+        head_img = ""
+
+        if session_fakeid:
+            fakeid = session_fakeid
+            print(f"[INFO] 使用 session 提供的 fakeid: {fakeid}")
+            # 通过 cgi-bin/home 获取最新 nickname
             try:
-                search_response = await client.get(
-                    f"{MP_BASE_URL}/cgi-bin/searchbiz",
-                    params={
-                        "action": "search_biz",
-                        "token": token,
-                        "lang": "zh_CN",
-                        "f": "json",
-                        "ajax": 1,
-                        "random": time.time(),
-                        "query": nickname,
-                        "begin": 0,
-                        "count": 5
-                    },
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    info_response = await client.get(
+                        f"{MP_BASE_URL}/cgi-bin/home",
+                        params={"t": "home/index", "token": token, "lang": "zh_CN"},
+                        headers=common_headers
+                    )
+                    html = info_response.text
+                    import re
+                    nick_match = re.search(r'nick_name\s*[:=]\s*["\']([^"\']+)["\']', html)
+                    if nick_match:
+                        nickname = nick_match.group(1)
+            except Exception as e:
+                print(f"[WARN] 获取 nickname 失败: {e}")
+                try:
+                    from utils.rss_store import get_account
+                    acct = get_account(session_fakeid)
+                    if acct and acct.get("nickname"):
+                        nickname = acct["nickname"]
+                except Exception:
+                    pass
+        else:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # 第一步：获取公众号昵称
+                info_response = await client.get(
+                    f"{MP_BASE_URL}/cgi-bin/home",
+                    params={"t": "home/index", "token": token, "lang": "zh_CN"},
                     headers=common_headers
                 )
-                
-                print(f"[API] 搜索API响应状态: {search_response.status_code}")
-                search_result = search_response.json()
-                print(f"[API] 搜索结果: {search_result}")
-                
-                if search_result.get("base_resp", {}).get("ret") == 0:
-                    accounts = search_result.get("list", [])
-                    print(f"[LIST] 找到 {len(accounts)} 个公众号")
-                    
-                    for account in accounts:
-                        acc_nickname = account.get("nickname", "")
-                        acc_fakeid = account.get("fakeid", "")
-                        print(f"   - {acc_nickname} (fakeid: {acc_fakeid})")
-                        
-                        if acc_nickname == nickname:
-                            fakeid = acc_fakeid
-                            print(f"[OK] 匹配成功，FakeID: {fakeid}")
-                            break
-                    
-                    if not fakeid:
-                        print(f"[WARN] 未找到完全匹配的公众号，尝试使用第一个结果")
-                        if accounts:
-                            fakeid = accounts[0].get("fakeid", "")
-                            print(f"[NOTE] 使用第一个公众号的FakeID: {fakeid}")
-                else:
-                    ret = search_result.get("base_resp", {}).get("ret")
-                    err_msg = search_result.get("base_resp", {}).get("err_msg", "未知错误")
-                    print(f"[ERROR] Search API error: ret={ret}, err_msg={err_msg}")
-                    
-            except Exception as e:
-                print(f"[ERROR] FakeID error: {str(e)}")
-                import traceback
-                traceback.print_exc()
+
+                html = info_response.text
+                import re
+                nick_match = re.search(r'nick_name\s*[:=]\s*["\']([^"\']+)["\']', html)
+                if nick_match:
+                    nickname = nick_match.group(1)
+
+                # 第二步：通过昵称搜索获取FakeID
+                print(f"[SEARCH] 开始获取FakeID，昵称: {nickname}")
+
+                try:
+                    search_response = await client.get(
+                        f"{MP_BASE_URL}/cgi-bin/searchbiz",
+                        params={
+                            "action": "search_biz",
+                            "token": token,
+                            "lang": "zh_CN",
+                            "f": "json",
+                            "ajax": 1,
+                            "random": time.time(),
+                            "query": nickname,
+                            "begin": 0,
+                            "count": 5
+                        },
+                        headers=common_headers
+                    )
+
+                    print(f"[API] 搜索API响应状态: {search_response.status_code}")
+                    search_result = search_response.json()
+                    print(f"[API] 搜索结果: {search_result}")
+
+                    if search_result.get("base_resp", {}).get("ret") == 0:
+                        accounts = search_result.get("list", [])
+                        print(f"[LIST] 找到 {len(accounts)} 个公众号")
+
+                        for account in accounts:
+                            acc_nickname = account.get("nickname", "")
+                            acc_fakeid = account.get("fakeid", "")
+                            acc_head_img = account.get("round_head_img", "")
+                            print(f"   - {acc_nickname} (fakeid: {acc_fakeid})")
+
+                            if acc_nickname == nickname:
+                                fakeid = acc_fakeid
+                                head_img = acc_head_img
+                                print(f"[OK] 匹配成功，FakeID: {fakeid}")
+                                break
+
+                        if not fakeid:
+                            print(f"[WARN] 未找到完全匹配的公众号，尝试使用第一个结果")
+                            if accounts:
+                                fakeid = accounts[0].get("fakeid", "")
+                                head_img = accounts[0].get("round_head_img", "")
+                                print(f"[NOTE] 使用第一个公众号的FakeID: {fakeid}")
+                    else:
+                        ret = search_result.get("base_resp", {}).get("ret")
+                        err_msg = search_result.get("base_resp", {}).get("err_msg", "未知错误")
+                        print(f"[ERROR] Search API error: ret={ret}, err_msg={err_msg}")
+
+                except Exception as e:
+                    print(f"[ERROR] FakeID error: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
         
         # 计算过期时间（4天后，与微信实际有效期一致）
         expire_time = int((time.time() + 4 * 24 * 3600) * 1000)
@@ -516,11 +561,27 @@ async def biz_login(request: Request):
         print(f"   Token: {token[:20]}...")
         print(f"   Cookie已保存到.env")
         
+        # 同步写入 SQLite accounts 表
+        try:
+            from utils.rss_store import upsert_account
+            upsert_account(
+                fakeid=fakeid, nickname=nickname,
+                head_img=head_img, alias="",
+                token=token, cookie=cookie_str, expire_time=expire_time,
+            )
+        except Exception as e:
+            print(f"[WARN] 写入 accounts 表失败: {e}")
+
+        # 清理与此 fakeid 相关的 session
+        for sid in list(_sessions.keys()):
+            if _sessions[sid].get("fakeid") == fakeid:
+                del _sessions[sid]
+
         await webhook.notify('login_success', {
             'nickname': nickname,
             'fakeid': fakeid,
         })
-        
+
         return {
             "success": True,
             "message": "登录成功",

@@ -142,6 +142,25 @@ def init_db():
     """)
     conn.commit()
 
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS accounts (
+            fakeid       TEXT PRIMARY KEY,
+            nickname     TEXT NOT NULL DEFAULT '',
+            head_img     TEXT NOT NULL DEFAULT '',
+            alias        TEXT NOT NULL DEFAULT '',
+            token        TEXT NOT NULL DEFAULT '',
+            cookie       TEXT NOT NULL DEFAULT '',
+            expire_time  INTEGER NOT NULL DEFAULT 0,
+            login_time   REAL NOT NULL DEFAULT 0,
+            is_active    INTEGER NOT NULL DEFAULT 0,
+            created_at   REAL NOT NULL DEFAULT (unixepoch()),
+            updated_at   REAL NOT NULL DEFAULT (unixepoch())
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_accounts_active ON accounts(is_active);
+    """)
+    conn.commit()
+
     conn.close()
     logger.info("RSS database initialized: %s", DB_PATH)
 
@@ -994,5 +1013,123 @@ def get_image_queue_stats() -> dict:
             "SELECT COUNT(*) FROM image_download_queue WHERE status='failed'"
         ).fetchone()[0]
         return {"total": total, "pending": pending, "done": done, "failed": failed}
+    finally:
+        conn.close()
+
+
+# ── 账号管理 ─────────────────────────────────────────────
+
+def upsert_account(fakeid: str, nickname: str = "", head_img: str = "",
+                   alias: str = "", token: str = "", cookie: str = "",
+                   expire_time: int = 0) -> bool:
+    """插入或更新账号记录，设置 is_active=1，同时将其他账号 is_active 置 0"""
+    conn = _get_conn()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("UPDATE accounts SET is_active=0, updated_at=unixepoch() WHERE is_active=1")
+        conn.execute(
+            "INSERT INTO accounts (fakeid, nickname, head_img, alias, token, cookie, expire_time, login_time, is_active) "
+            "VALUES (?,?,?,?,?,?,?,unixepoch(),1) "
+            "ON CONFLICT(fakeid) DO UPDATE SET "
+            "nickname=excluded.nickname, head_img=excluded.head_img, alias=excluded.alias, "
+            "token=excluded.token, cookie=excluded.cookie, expire_time=excluded.expire_time, "
+            "login_time=unixepoch(), is_active=1, updated_at=unixepoch()",
+            (fakeid, nickname, head_img, alias, token, cookie, expire_time),
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        logger.error("upsert_account failed: %s", e)
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def get_active_account() -> Optional[Dict]:
+    """获取当前活跃账号（is_active=1），无则返回 None"""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM accounts WHERE is_active=1 LIMIT 1"
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def list_accounts() -> List[Dict]:
+    """列出所有账号，按登录时间倒序。此方法已过滤 token/cookie，安全可公开"""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT fakeid, nickname, head_img, alias, expire_time, "
+            "login_time, is_active, created_at, updated_at "
+            "FROM accounts ORDER BY login_time DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_account(fakeid: str) -> Optional[Dict]:
+    """获取单个账号完整信息（含 token/cookie）"""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM accounts WHERE fakeid=?", (fakeid,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def activate_account(fakeid: str) -> bool:
+    """切换活跃账号：将指定 fakeid 设为 is_active=1，其余置 0"""
+    conn = _get_conn()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("UPDATE accounts SET is_active=0 WHERE is_active=1")
+        conn.execute(
+            "UPDATE accounts SET is_active=1, updated_at=unixepoch() WHERE fakeid=?",
+            (fakeid,)
+        )
+        conn.commit()
+        return conn.total_changes > 0
+    except Exception as e:
+        logger.error("activate_account failed: %s", e)
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def delete_account(fakeid: str) -> bool:
+    """删除账号记录"""
+    conn = _get_conn()
+    try:
+        conn.execute("DELETE FROM accounts WHERE fakeid=?", (fakeid,))
+        conn.commit()
+        return conn.total_changes > 0
+    finally:
+        conn.close()
+
+
+def deactivate_all_accounts() -> bool:
+    """将所有账号的 is_active 置 0"""
+    conn = _get_conn()
+    try:
+        conn.execute("UPDATE accounts SET is_active=0, updated_at=unixepoch()")
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def get_accounts_count() -> int:
+    """返回账号总数"""
+    conn = _get_conn()
+    try:
+        return conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0]
     finally:
         conn.close()

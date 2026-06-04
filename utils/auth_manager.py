@@ -45,7 +45,37 @@ class AuthManager:
 
         # 加载环境变量
         self._load_credentials(force=True)
+        # 启动迁移：accounts 表为空但文件中有有效凭据时，自动迁移入表
+        self._migrate_file_to_accounts()
         self._initialized = True
+
+    def _migrate_file_to_accounts(self):
+        """首次启动：若 accounts 表为空但文件中有凭据，自动迁入"""
+        try:
+            from utils.rss_store import get_accounts_count, upsert_account
+            if get_accounts_count() > 0:
+                return  # 已有账号记录，无需迁移
+        except Exception:
+            return  # accounts 表可能还不存在
+
+        # 读取文件凭据
+        self._load_credentials(force=True)
+        if not self.credentials.get("token") or not self.credentials.get("cookie"):
+            return  # 无有效凭据
+
+        # 有凭据但 accounts 表为空，执行迁移
+        print("[MIGRATE] 检测到文件凭据，正在迁移到 accounts 表...")
+        try:
+            upsert_account(
+                fakeid=self.credentials.get("fakeid", ""),
+                nickname=self.credentials.get("nickname", ""),
+                token=self.credentials.get("token", ""),
+                cookie=self.credentials.get("cookie", ""),
+                expire_time=self.credentials.get("expire_time", 0),
+            )
+            print("[MIGRATE] 凭据迁移完成")
+        except Exception as e:
+            print(f"[MIGRATE] 凭据迁移失败: {e}")
 
     def _load_credentials(self, force: bool = False):
         """
@@ -62,6 +92,22 @@ class AuthManager:
         if not force and (now - self._last_loaded_at) < self._load_ttl:
             return
         self._last_loaded_at = now
+
+        # 优先从 SQLite accounts 表读取活跃账号凭据
+        try:
+            from utils.rss_store import get_active_account
+            account = get_active_account()
+            if account:
+                self.credentials = {
+                    "token": account.get("token", ""),
+                    "cookie": account.get("cookie", ""),
+                    "fakeid": account.get("fakeid", ""),
+                    "nickname": account.get("nickname", ""),
+                    "expire_time": account.get("expire_time", 0),
+                }
+                return
+        except Exception as e:
+            print(f"Warning: Failed to load credentials from accounts table: {e}")
 
         # 先尝试从 JSON 凭证文件加载（Docker 环境）
         if self.credentials_file.exists():
@@ -148,9 +194,19 @@ class AuthManager:
         if not success:
             print(f"[ERROR] 凭证保存完全失败")
             return False
-        
+
+        # 同时写入 SQLite accounts 表
+        try:
+            from utils.rss_store import upsert_account
+            upsert_account(
+                fakeid=fakeid, nickname=nickname,
+                token=token, cookie=cookie, expire_time=expire_time,
+            )
+        except Exception as e:
+            print(f"[WARN] 无法写入 accounts 表: {e}")
+
         return True
-    
+
     def get_credentials(self) -> Optional[Dict[str, any]]:
         """
         获取有效的凭证
@@ -191,6 +247,7 @@ class AuthManager:
                 "authenticated": False,
                 "loggedIn": False,
                 "account": "",
+                "accounts_count": 0,
                 "status": "未登录，请先扫码登录"
             }
         
@@ -199,7 +256,7 @@ class AuthManager:
         current_time = int(time.time() * 1000)  # 转换为毫秒
         is_expired = expire_time > 0 and current_time > expire_time
         
-        return {
+        result = {
             "authenticated": True,
             "loggedIn": True,
             "account": self.credentials.get("nickname", ""),
@@ -209,6 +266,12 @@ class AuthManager:
             "isExpired": is_expired,
             "status": "登录可能已过期，建议重新登录" if is_expired else "登录正常"
         }
+        try:
+            from utils.rss_store import get_accounts_count
+            result["accounts_count"] = get_accounts_count()
+        except Exception:
+            result["accounts_count"] = 0
+        return result
     
     def clear_credentials(self) -> bool:
         """
@@ -226,7 +289,14 @@ class AuthManager:
                 "nickname": "",
                 "expire_time": 0
             }
-            
+
+            # 停用 accounts 表中的活跃账号（保留记录）
+            try:
+                from utils.rss_store import deactivate_all_accounts
+                deactivate_all_accounts()
+            except Exception as e:
+                print(f"[WARN] 无法停用 accounts: {e}")
+
             # 清除进程环境变量中残留的凭证
             env_keys = [
                 "WECHAT_TOKEN", "WECHAT_COOKIE", "WECHAT_FAKEID",

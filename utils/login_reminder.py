@@ -62,20 +62,19 @@ class LoginReminder:
 
     async def _check_login_status(self):
         """检查本地登录凭证的过期状态"""
-        from utils.auth_manager import auth_manager
-        
-        # 获取凭证信息
-        creds = auth_manager.get_credentials()
-        if not creds or not creds.get("token"):
-            logger.debug("无登录凭证，跳过检查")
+        from utils.rss_store import get_active_account
+
+        account = get_active_account()
+        if not account or not account.get("token"):
+            logger.debug("无活跃账号凭据，跳过检查")
             return
-        
-        expire_time = creds.get("expire_time", 0)
+
+        expire_time = account.get("expire_time", 0)
         if expire_time <= 0:
-            logger.debug("凭证无过期时间，跳过检查")
+            logger.debug("活跃账号无过期时间，跳过检查")
             return
-        
-        nickname = creds.get("nickname", "未知账号")
+
+        nickname = account.get("nickname", "未知账号")
         now = int(time.time() * 1000)  # 毫秒时间戳
         time_left_ms = expire_time - now
         time_left_sec = time_left_ms / 1000

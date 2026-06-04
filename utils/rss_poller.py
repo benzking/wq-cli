@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from typing import List, Dict, Optional
 
 import httpx
@@ -47,6 +48,10 @@ class RSSPoller:
     _running = False
     # [2026-05-15 OS-4] 共享 httpx.AsyncClient 避免每轮每 fakeid 都新建（省 DNS+TLS 握手）
     _http_client: Optional[httpx.AsyncClient] = None
+    consecutive_failures = 0
+    last_fail_time = None
+    last_fail_msg = None
+    _first_fail_msg = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -117,11 +122,15 @@ class RSSPoller:
         else:
             logger.info("RSS poll: checking %d subscriptions", len(fakeids))
 
+        any_success = False
+        any_attempt = False
+
         for fakeid in active_fakeids:
             sub = rss_store.get_subscription(fakeid)
             nickname = sub.get("nickname", "") if sub else ""
             try:
                 articles = await self._fetch_article_list(fakeid, creds)
+                any_attempt = True
                 if not articles:
                     logger.info("轮询器 拉取 %s(%s) 返回 0 篇文章", nickname, fakeid[:12])
                     rss_store.update_last_poll(fakeid)
@@ -164,12 +173,16 @@ class RSSPoller:
                 logger.debug("RSS poll: fakeid=%s fetched=%d new=%d skipped=%d",
                             fakeid[:12], len(articles), new_count, skipped_count)
                 rss_store.update_last_poll(fakeid)
+                any_success = True
             except WechatInvalidFakeidError as e:
                 # [2026-05-18] 同步 SaaS 修复：fakeid 在微信侧已失效，自动加入黑名单
                 # 取该 fakeid 的 nickname（如果数据库里有）便于后续运维查看
                 sub = rss_store.get_subscription(fakeid)
                 nickname = sub.get("nickname", "") if sub else ""
                 logger.warning("Fakeid %s (%s) is invalid on WeChat, adding to blacklist", fakeid[:8], nickname)
+                any_attempt = True
+                if self._first_fail_msg is None:
+                    self._first_fail_msg = f"{nickname}({fakeid[:12]}) 已失效，自动加入黑名单"
                 try:
                     rss_store.add_to_blacklist(
                         fakeid, nickname=nickname, reason="invalid_fakeid",
@@ -179,7 +192,22 @@ class RSSPoller:
                     logger.warning("Failed to blacklist invalid fakeid %s: %s", fakeid[:8], bl_err)
             except Exception as e:
                 logger.error("RSS poll error for %s: %s", fakeid[:8], e)
+                any_attempt = True
+                if self._first_fail_msg is None:
+                    self._first_fail_msg = f"获取 {nickname}({fakeid[:12]}) 文章失败: {str(e)[:100]}"
             await asyncio.sleep(3)
+
+        if any_attempt:
+            if any_success:
+                self.consecutive_failures = 0
+                self.last_fail_time = None
+                self.last_fail_msg = None
+                self._first_fail_msg = None
+            else:
+                self.consecutive_failures += 1
+                self.last_fail_time = time.time()
+                self.last_fail_msg = self._first_fail_msg or "所有订阅的轮询均失败"
+                self._first_fail_msg = None
 
     async def _fetch_article_list(self, fakeid: str, creds: Dict) -> List[Dict]:
         params = {

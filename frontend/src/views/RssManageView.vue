@@ -85,6 +85,10 @@ function onSearchKeydown(e) {
         {{ pollerStatus.running ? '轮询器运行中' : '轮询器已停止' }}
         <span v-if="pollerStatus.next_poll" class="next-poll">下次: {{ formatTime(pollerStatus.next_poll) }}</span>
       </div>
+      <div v-if="pollerStatus.consecutive_failures > 0" class="poll-alert" :class="pollerStatus.consecutive_failures >= 3 ? 'poll-error' : 'poll-warn'">
+        最近 {{ pollerStatus.consecutive_failures }} 次轮询失败
+        <span v-if="pollerStatus.last_fail_msg" class="poll-fail-msg">: {{ pollerStatus.last_fail_msg }}</span>
+      </div>
       <div class="status-actions">
         <button class="btn" @click="handlePoll">立即轮询</button>
         <input class="agg-rss" readonly :value="baseUrl + '/api/rss/all'" @focus="$event.target.select()" />
@@ -163,7 +167,10 @@ function onSearchKeydown(e) {
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
 .running .dot { background: var(--success); box-shadow: 0 0 6px rgba(47,158,68,0.4); }
 .next-poll { font-size: 11px; color: var(--text-muted); }
-.status-actions { display: flex; gap: 8px; align-items: center; }
+.poll-alert { font-size: 12px; padding: 4px 12px; border-radius: 12px; flex-shrink: 0; }
+.poll-warn { background: #fff3bf; color: #e67700; }
+.poll-error { background: #ffe3e3; color: #c92a2a; }
+.poll-fail-msg { opacity: 0.7; font-size: 11px; }
 .agg-rss { width: 220px; padding: 6px 10px; border: 1px solid var(--border-base); border-radius: var(--radius-sm); font-size: 11px; background: var(--bg-secondary); }
 
 .search-section {

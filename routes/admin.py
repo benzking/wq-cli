@@ -561,3 +561,134 @@ async def test_fetch_config():
             })
 
     return {"results": results}
+
+
+# ── 账号管理 ─────────────────────────────────────────────
+
+class AccountItem(BaseModel):
+    fakeid: str
+    nickname: str
+    head_img: str
+    alias: str
+    login_time: float
+    expire_time: int
+    is_expired: bool
+    is_active: bool
+
+
+class AccountListResponse(BaseModel):
+    success: bool
+    data: list = []
+
+
+@router.get("/accounts", response_model=AccountListResponse,
+            summary="获取账号历史列表")
+async def list_accounts_endpoint():
+    """获取所有登录过的公众号列表（不含 token/cookie）"""
+    try:
+        from utils.rss_store import list_accounts
+        accounts = list_accounts()
+        now = int(time.time() * 1000)
+        result = []
+        for a in accounts:
+            et = a.get("expire_time", 0)
+            result.append({
+                "fakeid": a["fakeid"],
+                "nickname": a.get("nickname", ""),
+                "head_img": a.get("head_img", ""),
+                "alias": a.get("alias", ""),
+                "login_time": a.get("login_time", 0),
+                "expire_time": et,
+                "is_expired": et > 0 and now > et,
+                "is_active": bool(a.get("is_active", 0)),
+            })
+        return {"success": True, "data": result}
+    except Exception as e:
+        return {"success": False, "data": [], "error": str(e)}
+
+
+@router.post("/accounts/{fakeid}/activate", summary="切换活跃账号")
+async def activate_account_endpoint(fakeid: str):
+    """将指定账号设为活跃，其他账号停用"""
+    try:
+        from utils.rss_store import activate_account, get_account
+        account = get_account(fakeid)
+        if not account:
+            return {"success": False, "error": "账号不存在"}
+        activate_account(fakeid)
+        auth_manager._load_credentials(force=True)
+        return {"success": True, "message": f"已切换到 {account.get('nickname', fakeid)}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.delete("/accounts/{fakeid}", summary="删除账号记录")
+async def delete_account_endpoint(fakeid: str):
+    """删除指定账号记录"""
+    try:
+        from utils.rss_store import delete_account, get_account
+        account = get_account(fakeid)
+        if not account:
+            return {"success": False, "error": "账号不存在"}
+
+        was_active = account.get("is_active", 0)
+        delete_account(fakeid)
+
+        if was_active:
+            auth_manager._load_credentials(force=True)
+
+        return {"success": True, "message": f"已删除 {account.get('nickname', fakeid)}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+class AlertStatusResponse(BaseModel):
+    success: bool
+    data: dict = {}
+
+
+@router.get("/alert-status", response_model=AlertStatusResponse,
+            summary="告警状态聚合")
+async def alert_status():
+    """返回凭据和轮询的告警状态"""
+    try:
+        from utils.rss_store import get_active_account
+        from utils.rss_poller import rss_poller
+
+        credential_expired = False
+        credential_expiring_soon = False
+        credential_nickname = ""
+        credential_hours_left = None
+
+        account = get_active_account()
+        if account:
+            et = account.get("expire_time", 0)
+            now = int(time.time() * 1000)
+            time_left_sec = (et - now) / 1000
+
+            credential_nickname = account.get("nickname", "")
+            if et > 0:
+                if time_left_sec <= 0:
+                    credential_expired = True
+                elif time_left_sec <= 24 * 3600:
+                    credential_expiring_soon = True
+                    credential_hours_left = round(time_left_sec / 3600, 1)
+
+        poll_failures = getattr(rss_poller, 'consecutive_failures', 0)
+        poll_last_fail_time = getattr(rss_poller, 'last_fail_time', None)
+        poll_last_fail_msg = getattr(rss_poller, 'last_fail_msg', None)
+
+        return {
+            "success": True,
+            "data": {
+                "credential_expired": credential_expired,
+                "credential_expiring_soon": credential_expiring_soon,
+                "credential_nickname": credential_nickname,
+                "credential_hours_left": credential_hours_left,
+                "poll_consecutive_failures": poll_failures,
+                "poll_last_fail_time": poll_last_fail_time,
+                "poll_last_fail_msg": poll_last_fail_msg,
+            }
+        }
+    except Exception as e:
+        return {"success": False, "data": {}, "error": str(e)}
