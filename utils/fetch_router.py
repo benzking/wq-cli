@@ -130,6 +130,11 @@ class FetcherRouter:
     def __init__(self):
         self.breakers: Dict[str, FetcherCircuitBreaker] = {}
         self._order: List[str] = []
+        self._labels: Dict[str, str] = {}
+
+    def get_label(self, name: str) -> str:
+        """获取渠道的显示名，如 cf节点1-wq1.8419609.xyz、socks5-127.0.0.1:1080、直连"""
+        return self._labels.get(name, name)
 
     def refresh_from_config(self, cooldown_seconds: int = 30,
                             death_threshold: int = 5):
@@ -139,12 +144,18 @@ class FetcherRouter:
         proxy_urls = get_proxy_urls()
         cf_urls = get_cf_worker_urls()
 
+        self._labels = {}
         names: List[str] = []
-        for i in range(len(proxy_urls)):
-            names.append(f"proxy_{i}")
-        for i in range(len(cf_urls)):
-            names.append(f"cf_node_{i}")
+        for i, url in enumerate(proxy_urls):
+            name = f"proxy_{i}"
+            names.append(name)
+            self._labels[name] = f"socks5-{self._extract_display(url)}"
+        for i, url in enumerate(cf_urls):
+            name = f"cf_node_{i}"
+            names.append(name)
+            self._labels[name] = f"cf节点{i+1}-{self._extract_display(url)}"
         names.append("direct")
+        self._labels["direct"] = "直连"
 
         dead_names = _load_dead_names()
 
@@ -170,6 +181,18 @@ class FetcherRouter:
         self.breakers = new_breakers
         self._order = names
         logger.info("FetcherRouter refreshed: %d channels", len(names))
+
+    @staticmethod
+    def _extract_display(url: str) -> str:
+        """从 URL 中提取展示用的简短标识，如 wq1.8419609.xyz、127.0.0.1:1080"""
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(url)
+            host = parsed.hostname or url
+            port = parsed.port
+            return f"{host}:{port}" if port else host
+        except Exception:
+            return url
 
     def select_fetcher(self, article_link: str,
                        specified: Optional[str] = None) -> Optional[str]:

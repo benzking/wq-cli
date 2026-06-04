@@ -383,14 +383,14 @@ def set_in_progress(fakeid: str, article_link: str):
         conn.close()
 
 
-def mark_success(fakeid: str, article_link: str):
+def mark_success(fakeid: str, article_link: str, fetcher: str = ""):
     conn = _get_conn()
     try:
         conn.execute(
             "UPDATE ingestion_logs SET status='success', fail_type='', "
-            "attempt=attempt+1, updated_at=? "
+            "fetcher=?, attempt=attempt+1, updated_at=? "
             "WHERE fakeid=? AND article_link=?",
-            (time.time(), fakeid, article_link),
+            (fetcher, time.time(), fakeid, article_link),
         )
         conn.commit()
     finally:
@@ -398,15 +398,16 @@ def mark_success(fakeid: str, article_link: str):
 
 
 def mark_failure(fakeid: str, article_link: str, fail_type: str,
-                 next_retry_at: float, is_permanent: bool = False):
+                 next_retry_at: float, is_permanent: bool = False,
+                 fetcher: str = ""):
     conn = _get_conn()
     try:
         status = "failed_permanent" if is_permanent else "failed_retryable"
         conn.execute(
             "UPDATE ingestion_logs SET status=?, fail_type=?, "
-            "attempt=attempt+1, next_retry_at=?, updated_at=? "
+            "fetcher=?, attempt=attempt+1, next_retry_at=?, updated_at=? "
             "WHERE fakeid=? AND article_link=?",
-            (status, fail_type, next_retry_at, time.time(), fakeid, article_link),
+            (status, fail_type, fetcher, next_retry_at, time.time(), fakeid, article_link),
         )
         conn.commit()
     finally:

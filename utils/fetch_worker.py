@@ -253,7 +253,8 @@ class FetchWorker:
             self._handle_failure(task, fetcher_name, "parse_error", latency_ms, tid)
             return
 
-        mark_success(fakeid, article_link)
+        mark_success(fakeid, article_link, fetcher_name,
+                     fetcher=fetcher_router.get_label(fetcher_name))
         insert_fetch_log(fakeid, article_link, fetcher_name, 1,
                          "", "", latency_ms, "queue_worker")
         fetcher_router.record_result(fetcher_name, True)
@@ -293,7 +294,8 @@ class FetchWorker:
             interval = 60
 
         next_retry = time.time() + interval
-        mark_failure(fakeid, article_link, fail_type, next_retry, is_permanent)
+        mark_failure(fakeid, article_link, fail_type, next_retry, is_permanent,
+                     fetcher=fetcher_router.get_label(fetcher_name))
         status = "failed_permanent" if is_permanent else "failed_retryable"
         logger.info("[Worker %s] FAILED (%s/%s): %s via %s",
                     tid, fail_type, status, article_link[:60], fetcher_name)
