@@ -362,6 +362,254 @@ def html_to_text(html: str) -> str:
     return text.strip()
 
 
+def html_to_markdown(html_content: str) -> str:
+    """
+    将 HTML 转为 Obsidian 规范的纯净 Markdown。
+
+    基于 BeautifulSoup 手写解析完成转换（零额外依赖）。转换规则：
+    - <h1>~<h6> → # ~ ###### ATX 标题
+    - <a> → [text](url)
+    - <img> → ![alt](url)
+    - <strong>/<b> → **粗体**
+    - <em>/<i> → *斜体*
+    - <table>/<tr>/<td>/<th> → Obsidian pipe table
+    - <ul>/<ol>/<li> → Markdown 缩进列表
+    - <blockquote> → > 引用
+    - <code> / <pre> → 行内代码 / 围栏代码块
+    - <br> → 软换行
+    - style/class 属性全部移除
+    - <script>/<style> 标签连带内容删除
+    - <span>/<div>/<section> 仅保留内部文本
+    - 连续空行压缩为单个空行
+    """
+    import html as _html
+    from bs4 import BeautifulSoup, NavigableString
+
+    if not html_content or not html_content.strip():
+        return ""
+
+    soup = BeautifulSoup(html_content, "html.parser")
+
+    # 1. 移除 script / style 标签（含内容）
+    for tag in soup(["script", "style"]):
+        tag.decompose()
+
+    # 2. 移除 style / class / id 等展示属性，保留 href/src/alt 等功能属性
+    _keep_attrs = {"href", "src", "alt", "title"}
+    for tag in soup.find_all(True):
+        for attr in list(tag.attrs):
+            if attr not in _keep_attrs:
+                tag.attrs.pop(attr, None)
+
+    # 3. 深度遍历，将 HTML 转为 Markdown
+    lines = []  # 行级输出的各行
+    _inline_buf: list[str] = []  # 当前正在构建的行内片段
+
+    def _flush_inline():
+        """将行内缓冲区的内容合并为一行，压入 lines"""
+        text = "".join(_inline_buf).strip()
+        if text:
+            # 压缩连续空格
+            text = re.sub(r'  +', ' ', text)
+            lines.append(text)
+        _inline_buf.clear()
+
+    def _block_sep():
+        """在块级元素之间插入空行分隔"""
+        if lines and lines[-1] != "":
+            lines.append("")
+
+    def _process(node, list_depth=0):
+        """递归处理 DOM 节点"""
+        if isinstance(node, NavigableString):
+            t = _html.unescape(str(node))
+            # 规范化空白
+            t = re.sub(r'\s+', ' ', t)
+            _inline_buf.append(t)
+            return
+
+        tag = node.name
+        if tag is None:
+            # 根节点 / 匿名块
+            for child in node.children:
+                _process(child, list_depth)
+            return
+
+        # ── 块级元素（先 flush 当前行，输出后 flush）──
+        if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
+            _flush_inline()
+            _block_sep()
+            level = int(tag[1])
+            prefix = "#" * level + " "
+            for child in node.children:
+                _process(child, list_depth)
+            content = "".join(_inline_buf).strip()
+            _inline_buf.clear()
+            if content:
+                lines.append(prefix + content)
+            return
+
+        if tag == "p":
+            _flush_inline()
+            _block_sep()
+            for child in node.children:
+                _process(child, list_depth)
+            _flush_inline()
+            return
+
+        if tag == "br":
+            # 换行：flush 当前行内为一行，不追加空行
+            _flush_inline()
+            return
+
+        if tag in ("div", "section", "article", "header", "footer", "main", "aside", "figure", "figcaption"):
+            _flush_inline()
+            _block_sep()
+            for child in node.children:
+                _process(child, list_depth)
+            _flush_inline()
+            return
+
+        if tag == "hr":
+            _flush_inline()
+            _block_sep()
+            lines.append("---")
+            return
+
+        # ── 引用 ──
+        if tag == "blockquote":
+            _flush_inline()
+            _block_sep()
+            before = len(lines)
+            for child in node.children:
+                _process(child, list_depth)
+            _flush_inline()
+            # 给 blockquote 内产生的行加 "> " 前缀
+            for i in range(before, len(lines)):
+                lines[i] = "> " + lines[i]
+            return
+
+        # ── 表格 ──
+        if tag == "table":
+            _flush_inline()
+            _block_sep()
+            rows = node.find_all("tr")
+            table_lines = []
+            for ri, row in enumerate(rows):
+                cells = row.find_all(["td", "th"])
+                cell_texts = []
+                for cell in cells:
+                    _inline_buf.clear()
+                    for child in cell.children:
+                        _process(child, list_depth)
+                    cell_texts.append("".join(_inline_buf).strip())
+                table_lines.append("| " + " | ".join(cell_texts) + " |")
+                if ri == 0 and row.find("th"):
+                    # 表头分隔行
+                    sep = "| " + " | ".join("---" for _ in cells) + " |"
+                    table_lines.append(sep)
+            lines.extend(table_lines)
+            _inline_buf.clear()
+            return
+
+        # ── 列表 ──
+        if tag in ("ul", "ol"):
+            _flush_inline()
+            is_ordered = tag == "ol"
+            idx = 0
+            for li in node.find_all("li", recursive=False):
+                _inline_buf.clear()
+                for child in li.children:
+                    _process(child, list_depth + 1)
+                text = "".join(_inline_buf).strip()
+                _inline_buf.clear()
+                if text:
+                    indent = "  " * list_depth
+                    if is_ordered:
+                        idx += 1
+                        lines.append(f"{indent}{idx}. {text}")
+                    else:
+                        lines.append(f"{indent}- {text}")
+            return
+
+        # ── 代码块 ──
+        if tag == "pre":
+            _flush_inline()
+            code_tag = node.find("code")
+            code_text = code_tag.get_text() if code_tag else node.get_text()
+            lines.append("```")
+            for cl in code_text.splitlines():
+                lines.append(cl)
+            lines.append("```")
+            return
+
+        # ── 行内元素 ──
+        if tag in ("strong", "b"):
+            _inline_buf.append("**")
+            for child in node.children:
+                _process(child, list_depth)
+            _inline_buf.append("**")
+            return
+
+        if tag in ("em", "i"):
+            _inline_buf.append("*")
+            for child in node.children:
+                _process(child, list_depth)
+            _inline_buf.append("*")
+            return
+
+        if tag == "code":
+            _inline_buf.append("`")
+            for child in node.children:
+                _process(child, list_depth)
+            _inline_buf.append("`")
+            return
+
+        if tag == "a":
+            href = node.get("href", "")
+            _inline_buf.append("[")
+            for child in node.children:
+                _process(child, list_depth)
+            _inline_buf.append(f"]({href})")
+            return
+
+        if tag == "img":
+            src = node.get("src", "")
+            alt = node.get("alt", "")
+            _inline_buf.append(f"![{alt}]({src})")
+            return
+
+        if tag == "span":
+            # 剥离标签，保留文本
+            for child in node.children:
+                _process(child, list_depth)
+            return
+
+        # ── 未知标签：当作块级容器处理 ──
+        _flush_inline()
+        for child in node.children:
+            _process(child, list_depth)
+        _flush_inline()
+
+    _process(soup)
+
+    # blockquote 后处理：查找 blockquote 产生的行并加前缀
+    # 由于上面流程 blockquote 已经被处理为嵌套行，这里用正则标记后处理
+    # 简化方案：blockquote 在 _process 中已将子内容输出到 lines
+    # 但需要加 "> " 前缀 — 采用先标记后处理的策略
+    # 实际采用原始 HTML 正则预处理 blockquote 更简单
+
+    # 最终合并
+    result = "\n".join(lines)
+
+    # 清理：连续 3+ 空行压缩为 2 个
+    result = re.sub(r'\n{3,}', '\n\n', result)
+    # 清理行尾空白
+    result = re.sub(r'[ \t]+$', '', result, flags=re.MULTILINE)
+
+    return result.strip()
+
+
 # ==================== 使用示例 ====================
 
 def example_usage():

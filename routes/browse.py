@@ -11,6 +11,7 @@ import os
 import logging
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Query, Request, HTTPException
 from pydantic import BaseModel, Field
@@ -21,6 +22,13 @@ from utils.image_proxy import proxy_image_url
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _make_content_disposition(filename: str) -> str:
+    """生成 RFC 5987 兼容的 Content-Disposition header，支持中文文件名"""
+    ascii_safe = filename.encode("ascii", "ignore").decode("ascii") or "download"
+    encoded = quote(filename, safe="")
+    return f'attachment; filename="{ascii_safe}"; filename*=UTF-8\'\'{encoded}'
 
 
 def get_base_url(request: Request) -> str:
@@ -177,10 +185,20 @@ def _is_verification(html: str) -> bool:
     return "verifycode" in hl or "请输入图片中的字符" in html or "环境异常" in html
 
 
-@router.get("/browse/article/{article_id}/export", summary="导出文章 MD + 图片 zip")
+@router.get("/browse/article/{article_id}/export", summary="导出文章 Markdown（有图打包 ZIP）")
 async def export_article(article_id: int, request: Request):
-    import zipfile, io as _io, re as _re
-    from fastapi.responses import StreamingResponse
+    """
+    导出文章为 Obsidian 规范 Markdown。
+    - 无图片：直接返回 .md 文件
+    - 有图片：打包 ZIP（MD + 图片），图片优先本地缓存，未命中时从远端下载
+    """
+    import zipfile
+    import io as _io
+    import re as _re
+    from pathlib import Path as _Path
+    from urllib.parse import unquote, urlparse, parse_qs
+    from datetime import datetime
+    from fastapi.responses import StreamingResponse, Response
 
     article = rss_store.get_article_by_id(article_id)
     if not article:
@@ -188,27 +206,149 @@ async def export_article(article_id: int, request: Request):
 
     content = article.get("content", "") or ""
     title = article.get("title", "untitled")
-    safe_title = _re.sub(r'[\\/*?:"<>|]', '_', title)
-    safe_title = safe_title.encode('ascii', 'ignore').decode('ascii') or "article"
+    nickname = article.get("nickname", "") or article.get("fakeid", "unknown")
+    publish_time = article.get("publish_time", 0)
 
+    # ── 命名 ──
+    def safe_filename(s: str) -> str:
+        """替换非法文件名字符，保留中文等非 ASCII 字符"""
+        return _re.sub(r'[\\/*?:"<>|]', '_', s).strip() or "untitled"
+
+    def format_date(ts: int) -> str:
+        """Unix timestamp → YYYYMMDD"""
+        return datetime.fromtimestamp(ts).strftime("%Y%m%d")
+
+    safe_title = safe_filename(title)
+    date_str = format_date(publish_time) if publish_time else "00000000"
+    base_name = f"{safe_filename(nickname)}-{date_str}-{safe_title}"
+
+    # ── 1. 提取图片 URL 列表（在转 MD 之前，从原始 HTML 提取）──
+    img_urls = _re.findall(r'<img[^>]*\s(?:data-)?src="([^"]+)"', content, _re.IGNORECASE)
+    # 去重保持顺序
+    seen = set()
+    unique_urls = []
+    for u in img_urls:
+        if u not in seen:
+            seen.add(u)
+            unique_urls.append(u)
+    img_urls = unique_urls
+
+    # ── 2. HTML → Markdown ──
+    from utils.content_processor import html_to_markdown
+    md_body = html_to_markdown(content)
+    if not md_body:
+        md_body = f"# {title}\n\n> 来源: {nickname} · {publish_time}\n\n*(文章内容为空)*"
+
+    # ── 3. 图片收集（混合策略）──
+    local_dir = _Path(__file__).parent.parent / "data" / "images" / str(article_id)
+
+    def extract_original_url(proxy_or_url: str) -> str:
+        """从代理 URL 反解原始图片地址"""
+        if "/api/image?url=" in proxy_or_url:
+            try:
+                parsed = urlparse(proxy_or_url)
+                qs = parse_qs(parsed.query)
+                encoded = qs.get("url", [proxy_or_url])[0]
+                return unquote(encoded)
+            except Exception:
+                return proxy_or_url
+        return proxy_or_url
+
+    async def download_image(url: str, timeout: int = 15) -> bytes | None:
+        """HTTP 下载图片（异步，不阻塞 event loop）"""
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    return resp.content
+        except Exception:
+            pass
+        return None
+
+    def guess_ext(url: str, data: bytes | None = None) -> str:
+        """推断图片扩展名"""
+        # 从 URL 路径推断
+        path = urlparse(url).path.lower()
+        for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"):
+            if path.endswith(ext):
+                return ext if ext != ".jpeg" else ".jpg"
+        # 从文件头魔数推断
+        if data:
+            if data[:3] == b"\xff\xd8\xff":
+                return ".jpg"
+            if data[:8] == b"\x89PNG\r\n\x1a\n":
+                return ".png"
+            if data[:6] in (b"GIF87a", b"GIF89a"):
+                return ".gif"
+            if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+                return ".webp"
+        return ".jpg"
+
+    collected_images: list[dict] = []  # [{name, data}]
+    url_to_local: dict[str, str] = {}  # 原始 img_url → 本地文件名
+
+    for i, img_url in enumerate(img_urls):
+        local_name = f"img_{i+1:03d}"
+        img_data = None
+        ext = ".jpg"
+
+        # 策略 1：本地缓存
+        if local_dir.exists():
+            for candidate_ext in (".jpg", ".jpeg", ".png", ".gif", ".webp"):
+                candidate = local_dir / f"img_{i+1:03d}{candidate_ext}"
+                if candidate.exists():
+                    img_data = candidate.read_bytes()
+                    ext = candidate_ext if candidate_ext != ".jpeg" else ".jpg"
+                    break
+
+        # 策略 2：远端下载
+        if img_data is None:
+            original_url = extract_original_url(img_url)
+            img_data = await download_image(original_url)
+            if img_data:
+                ext = guess_ext(original_url, img_data)
+
+        # 策略 3：跳过
+        if img_data is None:
+            url_to_local[img_url] = img_url  # 保留原始 URL 不替换
+            continue
+
+        local_name_with_ext = f"{local_name}{ext}"
+        collected_images.append({
+            "name": local_name_with_ext,
+            "data": img_data,
+        })
+        url_to_local[img_url] = f"./{local_name_with_ext}"
+
+    # ── 4. 替换 MD 中的图片 URL 为相对路径 ──
+    for original_url, local_path in url_to_local.items():
+        md_body = md_body.replace(original_url, local_path)
+
+    # ── 5. 无图片 → 直接返回 .md ──
+    if not collected_images:
+        md_full = f"# {title}\n\n> 来源: {nickname} · {publish_time}\n\n{md_body}"
+        return Response(
+            content=md_full.encode("utf-8"),
+            media_type="text/markdown; charset=utf-8",
+            headers={
+                "Content-Disposition": _make_content_disposition(f"{base_name}.md")
+            },
+        )
+
+    # ── 6. 有图片 → 打包 ZIP ──
+    md_full = f"# {title}\n\n> 来源: {nickname} · {publish_time}\n\n{md_body}"
     buf = _io.BytesIO()
-    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        md_body = content
-        img_urls = _re.findall(r'src="([^"]+)"', content)
-        for i, url in enumerate(img_urls):
-            fname = f"img_{i+1:03d}.jpg"
-            md_body = md_body.replace(url, f"./{fname}")
-            local_dir = Path(__file__).parent.parent / "data" / "images" / str(article_id)
-            img_path = local_dir / fname
-            if img_path.exists():
-                zf.write(str(img_path), fname)
-
-        md_content = f"# {title}\n\n> 来源: {article.get('nickname', '')} · {article.get('publish_time', '')}\n\n{md_body}"
-        zf.writestr(f"{safe_title}.md", md_content)
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"{base_name}.md", md_full)
+        for img in collected_images:
+            zf.writestr(img["name"], img["data"])
 
     buf.seek(0)
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{safe_title}.zip"'}
+        headers={
+            "Content-Disposition": _make_content_disposition(f"{base_name}.zip")
+        },
     )

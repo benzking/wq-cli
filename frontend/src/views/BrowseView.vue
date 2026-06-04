@@ -160,7 +160,7 @@ function formatFullDate(ts) {
             <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center text-text-secondary transition-colors duration-150 hover:bg-bg-hover hover:text-accent" title="导出 PDF" @click="handleExportPDF">
               <FileText :size="14" />
             </button>
-            <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center text-text-secondary transition-colors duration-150 hover:bg-bg-hover hover:text-accent" title="导出 MD" @click="handleExportMD">
+            <button class="w-8 h-8 border border-border-light rounded-sm bg-bg-primary cursor-pointer text-sm flex items-center justify-center text-text-secondary transition-colors duration-150 hover:bg-bg-hover hover:text-accent" title="导出 Markdown" @click="handleExportMD">
               <FileDown :size="14" />
             </button>
           </div>
