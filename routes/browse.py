@@ -189,6 +189,7 @@ async def export_article(article_id: int, request: Request):
     content = article.get("content", "") or ""
     title = article.get("title", "untitled")
     safe_title = _re.sub(r'[\\/*?:"<>|]', '_', title)
+    safe_title = safe_title.encode('ascii', 'ignore').decode('ascii') or "article"
 
     buf = _io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:

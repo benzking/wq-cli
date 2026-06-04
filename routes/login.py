@@ -74,14 +74,28 @@ class SessionRequest(BaseModel):
     fakeid: Optional[str] = None
 
 @router.post("/session/{sessionid}", summary="初始化登录会话", include_in_schema=True)
-async def create_session(sessionid: str, request: Request, body: Optional[SessionRequest] = None):
+async def create_session(sessionid: str, request: Request):
     """
     初始化登录会话，必须在获取二维码之前调用。
 
     **路径参数：**
     - **sessionid**: 会话标识，由前端生成
+
+    **请求体（可选）：**
+    - **fakeid**: 公众号ID，传了表示"重新扫码更新已有账号"
     """
     try:
+        # 手动读取请求体以兼容无 Content-Type 的情况
+        body_fakeid = None
+        try:
+            raw_body = await request.body()
+            if raw_body:
+                import json
+                body_data = json.loads(raw_body)
+                body_fakeid = body_data.get("fakeid")
+        except Exception:
+            pass
+
         # [SEARCH] 调试：输出请求信息
         cookie_header = request.headers.get("cookie", "")
         print(f"[DEBUG] 创建Session - Cookie: {cookie_header[:100]}..." if len(cookie_header) > 100 else f"[DEBUG] 创建Session - Cookie: {cookie_header}")
@@ -110,7 +124,7 @@ async def create_session(sessionid: str, request: Request, body: Optional[Sessio
         _sessions[sessionid] = {
             "created_at": time.time(),
             "status": "created",
-            "fakeid": body.fakeid if body else None,
+            "fakeid": body_fakeid,
         }
         
         data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {"base_resp": {"ret": 0}}
@@ -191,6 +205,10 @@ async def get_qrcode(request: Request):
         is_png = content.startswith(b'\x89PNG')
         is_jpeg = content.startswith(b'\xff\xd8\xff') or b'JFIF' in content[:20]
         is_image = "image" in content_type or is_png or is_jpeg
+        import logging
+        _qlog = logging.getLogger("routes.login")
+        _qlog.info("[QR_DEBUG] content_type=%s len=%d is_image=%s is_png=%s is_jpeg=%s first_bytes=%s",
+                    content_type, len(content), is_image, is_png, is_jpeg, content[:30])
         
         # 如果返回的是JSON或者不是图片，说明出错了
         if not is_image:
