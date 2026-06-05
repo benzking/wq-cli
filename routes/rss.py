@@ -234,6 +234,38 @@ async def poller_status():
     )
 
 
+@router.post("/rss/poll/{fakeid}", response_model=SubscribeResponse,
+             summary="手动轮询指定公众号")
+async def poll_single(fakeid: str):
+    """
+    手动触发单个公众号的轮询，立即拉取最新文章。
+
+    行为逻辑：
+    1. 30 秒内已轮询过 → 429 频率限制
+    2. 轮询器运行中且在当次批次中 → "已在队列"
+    3. 其他情况 → 直接拉取
+    """
+    # 分支 1：检查 30 秒频率限制
+    sub = rss_store.get_subscription(fakeid)
+    if sub and sub.get("last_poll", 0) and time.time() - sub["last_poll"] < 30:
+        raise HTTPException(
+            status_code=429,
+            detail="为避免风险，请勿频繁轮询",
+        )
+
+    # 分支 2：检查是否已在当前轮询批次中
+    if rss_poller.is_running and rss_poller.is_in_current_batch(fakeid):
+        return SubscribeResponse(success=True, message="已在轮询队列，请稍候")
+
+    # 分支 3：直接拉取
+    try:
+        await rss_poller.poll_single(fakeid)
+        return SubscribeResponse(success=True, message="已加入轮询队列")
+    except Exception as e:
+        logger.error("poll_single API error: %s", e)
+        return SubscribeResponse(success=False, message=f"轮询失败: {str(e)}")
+
+
 # ── 聚合 RSS ─────────────────────────────────────────────
 
 @router.get("/rss/all", summary="聚合 RSS 订阅源",

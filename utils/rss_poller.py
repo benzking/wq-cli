@@ -52,6 +52,11 @@ class RSSPoller:
     last_fail_time = None
     last_fail_msg = None
     _first_fail_msg = None
+    _current_batch: set = set()
+
+    def is_in_current_batch(self, fakeid: str) -> bool:
+        """判断 fakeid 是否在当前轮询批次中（用于'已在队列'判断）"""
+        return fakeid in self._current_batch
 
     def __new__(cls):
         if cls._instance is None:
@@ -114,6 +119,7 @@ class RSSPoller:
         
         # 过滤掉黑名单中的公众号
         active_fakeids = [f for f in fakeids if f not in blacklisted]
+        self._current_batch = set(active_fakeids)
         skipped = len(fakeids) - len(active_fakeids)
         
         if skipped > 0:
@@ -196,6 +202,8 @@ class RSSPoller:
                 if self._first_fail_msg is None:
                     self._first_fail_msg = f"获取 {nickname}({fakeid[:12]}) 文章失败: {str(e)[:100]}"
             await asyncio.sleep(3)
+
+        self._current_batch.clear()
 
         if any_attempt:
             if any_success:
@@ -301,5 +309,50 @@ class RSSPoller:
     async def poll_now(self):
         """手动触发一次轮询"""
         await self._poll_all()
-    
+
+    async def poll_single(self, fakeid: str):
+        """立即轮询指定公众号（单号，不等待轮询周期）"""
+        creds = auth_manager.get_credentials()
+        if not creds or not creds.get("token") or not creds.get("cookie"):
+            logger.warning("RSS poll_single skipped: not logged in")
+            return
+
+        sub = rss_store.get_subscription(fakeid)
+        nickname = sub.get("nickname", "") if sub else ""
+
+        try:
+            articles = await self._fetch_article_list(fakeid, creds)
+        except WechatInvalidFakeidError:
+            logger.warning("Fakeid %s is invalid on WeChat, adding to blacklist", fakeid[:8])
+            rss_store.add_to_blacklist(
+                fakeid, nickname=nickname, reason="invalid_fakeid",
+                note="手动刷新触发：fakeid 已失效",
+            )
+            return
+        except Exception as e:
+            logger.error("poll_single error for %s: %s", fakeid[:8], e)
+            return
+
+        if not articles:
+            logger.info("poll_single %s(%s) returned 0 articles", nickname, fakeid[:12])
+            rss_store.update_last_poll(fakeid)
+            return
+
+        new_links = []
+        for a in articles:
+            link = a.get("link", "")
+            if not rss_store.article_exists(fakeid, link):
+                new_links.append(link)
+
+        if new_links:
+            new_articles = [a for a in articles if a.get("link") in new_links]
+            rss_store.save_articles(fakeid, new_articles)
+            log_ingestion_start(fakeid, new_links, channel="poll")
+            from utils.fetch_worker import fetch_worker
+            fetch_worker.wake()
+
+        rss_store.update_last_poll(fakeid)
+        logger.info("poll_single %s(%s): %d articles, %d new",
+                    nickname, fakeid[:12], len(articles), len(new_links))
+
 rss_poller = RSSPoller()
