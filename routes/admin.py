@@ -333,6 +333,7 @@ async def _fetch_history_internal(fakeid: str, target_count: int) -> tuple:
     """
     import httpx
     import json
+    import os
     import asyncio
     import random
     
@@ -370,28 +371,24 @@ async def _fetch_history_internal(fakeid: str, target_count: int) -> tuple:
             "f": "json",
             "ajax": 1,
         }
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": "https://mp.weixin.qq.com/",
-            "Cookie": creds["cookie"],
-        }
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(
-                "https://mp.weixin.qq.com/cgi-bin/appmsgpublish",
-                params=params,
-                headers=headers,
-            )
-            resp.raise_for_status()
-            result = resp.json()
-        
-        base_resp = result.get("base_resp", {})
-        ret_code = base_resp.get("ret", -1)
-        
-        if ret_code == 200003:
-            raise ValueError("触发验证码，请稍后重试")
-        if ret_code != 0:
-            raise ValueError(f"微信API错误: ret={ret_code}")
+        from utils.mp_api_client import fetch_mp_api
+
+        creds_dict = {"token": creds["token"], "cookie": creds["cookie"]}
+        use_proxy = os.getenv("MP_API_USE_PROXY", "false").lower() == "true"
+        api_result = await fetch_mp_api(
+            "https://mp.weixin.qq.com/cgi-bin/appmsgpublish",
+            params=params, creds=creds_dict, use_proxy=use_proxy,
+        )
+
+        if api_result.error_type == "token_expired":
+            raise ValueError("登录已过期，请重新扫码登录")
+        if api_result.error_type == "frequency_control":
+            raise ValueError("请求过于频繁，触发频率控制，请稍后重试")
+        if not api_result.is_ok:
+            raise ValueError(f"微信API错误: {api_result.error_type}")
+
+        assert api_result.data is not None
+        result = api_result.data
         
         publish_page = result.get("publish_page", {})
         if isinstance(publish_page, str):

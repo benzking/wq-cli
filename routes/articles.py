@@ -13,6 +13,7 @@ from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 import json
+import os
 import httpx
 from utils.auth_manager import auth_manager
 
@@ -100,17 +101,31 @@ async def get_articles(
         
         # 请求微信API
         url = "https://mp.weixin.qq.com/cgi-bin/appmsgpublish"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": "https://mp.weixin.qq.com/",
-            "Cookie": cookie
-        }
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, params=params, headers=headers)
-            response.raise_for_status()
-            result = response.json()
-        
+
+        from utils.mp_api_client import fetch_mp_api
+
+        creds_dict = {"token": token, "cookie": cookie}
+        use_proxy = os.getenv("MP_API_USE_PROXY", "false").lower() == "true"
+        api_result = await fetch_mp_api(
+            url, params=params, creds=creds_dict, use_proxy=use_proxy,
+        )
+
+        if api_result.error_type == "token_expired":
+            return ArticlesResponse(
+                success=False, error="登录已过期，请重新登录"
+            )
+        if api_result.error_type == "frequency_control":
+            return ArticlesResponse(
+                success=False, error="请求过于频繁，请稍后重试"
+            )
+        if not api_result.is_ok:
+            return ArticlesResponse(
+                success=False, error=f"获取文章列表失败: {api_result.error_type}"
+            )
+
+        assert api_result.data is not None
+        result = api_result.data
+
         # 检查返回结果
         base_resp = result.get("base_resp", {})
         if base_resp.get("ret") != 0:
