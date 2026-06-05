@@ -314,8 +314,7 @@ class RSSPoller:
         """立即轮询指定公众号（单号，不等待轮询周期）"""
         creds = auth_manager.get_credentials()
         if not creds or not creds.get("token") or not creds.get("cookie"):
-            logger.warning("RSS poll_single skipped: not logged in")
-            return
+            raise ValueError("未登录，请先登录微信公众号后台")
 
         sub = rss_store.get_subscription(fakeid)
         nickname = sub.get("nickname", "") if sub else ""

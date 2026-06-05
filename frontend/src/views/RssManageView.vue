@@ -118,7 +118,7 @@ async function handleSinglePoll(fakeid) {
   if (pollingSet.value.has(fakeid)) return
   pollingSet.value = new Set([...pollingSet.value, fakeid])
   try {
-    const res = await fetch(`/api/rss/poll/${fakeid}`, { method: 'POST' })
+    const res = await fetch(baseUrl + '/api/rss/poll/' + fakeid, { method: 'POST' })
     const data = await res.json()
     if (res.status === 429) {
       toast.warning(data.detail || '为避免风险，请勿频繁轮询')
