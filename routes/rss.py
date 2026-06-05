@@ -96,6 +96,9 @@ class SubscriptionItem(BaseModel):
     created_at: int
     last_poll: int
     article_count: int = 0
+    ingested_count: int = 0
+    non_ingested_count: int = 0
+    historical_count: int = 0
     rss_url: str = ""
 
 
@@ -168,16 +171,18 @@ async def get_subscriptions(request: Request):
         # 将头像 URL 转换为代理链接
         head_img = proxy_image_url(s.get("head_img", ""), base_url)
         fakeid = s['fakeid']
-        # 统计历史文章数量
+        # 统计各类文章数量
         historical_count = rss_store.count_historical_articles(fakeid)
-        pending_count = rss_store.count_pending_articles(fakeid)
+        ingested_count = rss_store.count_ingested_articles(fakeid)
+        non_ingested_count = rss_store.count_non_ingested_articles(fakeid)
         items.append({
             **s,
             "head_img": head_img,
             "rss_url": f"{base_url}/api/rss/{fakeid}",
             "historical_rss_url": f"{base_url}/api/rss/{fakeid}/history" if historical_count > 0 else "",
             "historical_count": historical_count,
-            "pending_count": pending_count,
+            "ingested_count": ingested_count,
+            "non_ingested_count": non_ingested_count,
         })
 
     return SubscriptionListResponse(success=True, data=items)
