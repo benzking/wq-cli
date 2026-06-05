@@ -392,13 +392,29 @@ def count_historical_articles(fakeid: str) -> int:
         conn.close()
 
 
-def count_pending_articles(fakeid: str) -> int:
-    """统计待入库文章数 — ingestion_logs 中 status='pending' 的数量"""
+def count_ingested_articles(fakeid: str) -> int:
+    """统计已入库 — articles JOIN ingestion_logs WHERE status='success' (含 poll + deep_fetch + manual)"""
     conn = _get_conn()
     try:
         row = conn.execute(
-            "SELECT COUNT(*) as cnt FROM ingestion_logs "
-            "WHERE fakeid=? AND status='pending'",
+            "SELECT COUNT(DISTINCT a.id) as cnt FROM articles a "
+            "INNER JOIN ingestion_logs il ON a.fakeid = il.fakeid AND a.link = il.article_link "
+            "WHERE a.fakeid=? AND il.status='success'",
+            (fakeid,),
+        ).fetchone()
+        return row["cnt"] if row else 0
+    finally:
+        conn.close()
+
+
+def count_non_ingested_articles(fakeid: str) -> int:
+    """统计待入库 — articles JOIN ingestion_logs WHERE status!='success' (含 pending/in_progress/failed)"""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(DISTINCT a.id) as cnt FROM articles a "
+            "INNER JOIN ingestion_logs il ON a.fakeid = il.fakeid AND a.link = il.article_link "
+            "WHERE a.fakeid=? AND il.status!='success'",
             (fakeid,),
         ).fetchone()
         return row["cnt"] if row else 0
