@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, inject, ref, computed } from 'vue'
+import { onMounted, onUnmounted, inject, ref, computed } from 'vue'
 import { useRss } from '@/composables/useRss'
 import EmptyState from '@/components/EmptyState.vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
@@ -30,7 +30,16 @@ const showSubscribe = ref(false)
 const categoryTarget = ref(null)
 const confirmTarget = ref(null)
 
-onMounted(() => { loadSubscriptions(); loadStatus(); loadCategories() })
+onMounted(() => {
+  loadSubscriptions(); loadStatus(); loadCategories()
+  document.addEventListener('mousemove', onResizeMove)
+  document.addEventListener('mouseup', onResizeEnd)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('mousemove', onResizeMove)
+  document.removeEventListener('mouseup', onResizeEnd)
+})
 
 // ── computed ────────────────────────────────────────
 const subscriptionIdList = computed(() => subscriptions.value.map(s => s.fakeid))
@@ -126,12 +135,80 @@ async function handleSinglePoll(fakeid) {
   }
 }
 
-// ── column layout (dynamic grid, will be enhanced in Task 6) ──
+// ── column resize ────────────────────────────────────
 const COL_KEYS = ['name','all','ingested','non_ingested','poll','category','actions']
-const DEFAULT_COLS = { name: 1.5, all: 0.4, ingested: 0.4, non_ingested: 0.4, poll: 0.9, category: 0.8, actions: 1.3 }
+
+const presets = {
+  compact: { name: 1.2, all: 0.3, ingested: 0.3, non_ingested: 0.3, poll: 0.6, category: 0.6, actions: 1 },
+  default: { name: 1.5, all: 0.4, ingested: 0.4, non_ingested: 0.4, poll: 0.9, category: 0.8, actions: 1.3 },
+  wide:    { name: 2,   all: 0.5, ingested: 0.5, non_ingested: 0.5, poll: 1.2, category: 1,   actions: 1.6 },
+}
+
+const STORAGE_KEY = 'rss_column_config'
+
+function loadColumnConfig() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && parsed.columns) return parsed
+    }
+  } catch {}
+  return { preset: 'default', columns: { ...presets.default } }
+}
+
+function saveColumnConfig(preset, columns) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ preset, columns }))
+  } catch {}
+}
+
+const colConfig = ref(loadColumnConfig())
+const currentPreset = ref(colConfig.value.preset)
 
 function getGridStyle() {
-  return COL_KEYS.map(k => (DEFAULT_COLS[k] || 0.4) + 'fr').join(' ')
+  const cols = colConfig.value.columns
+  return COL_KEYS.map(k => (cols[k] || 0.4) + 'fr').join(' ')
+}
+
+function selectPreset(name) {
+  currentPreset.value = name
+  colConfig.value = { preset: name, columns: { ...presets[name] } }
+  saveColumnConfig(name, colConfig.value.columns)
+}
+
+// ── resize drag logic ────────────────────────────────
+let dragState = null
+
+function onResizeStart(e, col) {
+  e.preventDefault()
+  const container = e.currentTarget.closest('[data-grid-container]')
+  if (!container) return
+  const rect = container.getBoundingClientRect()
+  const totalFlex = COL_KEYS.reduce((s, k) => s + (colConfig.value.columns[k] || 0.4), 0)
+  dragState = {
+    col,
+    startX: e.clientX,
+    startFlex: colConfig.value.columns[col] || 0.4,
+    containerWidth: rect.width,
+    totalFlex,
+  }
+}
+
+function onResizeMove(e) {
+  if (!dragState) return
+  const dx = e.clientX - dragState.startX
+  const flexDelta = (dx / dragState.containerWidth) * dragState.totalFlex
+  const newFlex = Math.max(0.15, dragState.startFlex + flexDelta)
+  colConfig.value.columns[dragState.col] = newFlex
+  colConfig.value = { ...colConfig.value, preset: 'custom' }
+}
+
+function onResizeEnd() {
+  if (!dragState) return
+  dragState = null
+  currentPreset.value = 'custom'
+  saveColumnConfig('custom', colConfig.value.columns)
 }
 
 // ── helpers ─────────────────────────────────────────
@@ -190,6 +267,19 @@ function avatarBg(i) {
       </button>
     </div>
 
+    <!-- Preset buttons (desktop only) -->
+    <div v-if="subscriptions.length" class="hidden md:flex items-center gap-2 mb-2">
+      <span class="text-[10px] font-semibold uppercase tracking-[0.05em]" style="color: var(--text-muted);">列宽</span>
+      <button v-for="p in ['compact','default','wide']" :key="p"
+        class="text-[11px] px-3 py-1 rounded-full font-medium transition-all duration-150"
+        :style="currentPreset === p
+          ? 'background:var(--accent);color:#fff;'
+          : 'background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border-light);'"
+        @click="selectPreset(p)">{{ { compact: '紧凑', default: '默认', wide: '宽松' }[p] }}</button>
+      <span v-if="currentPreset === 'custom'"
+        class="text-[10px] px-2 py-0.5 rounded-full" style="background:#fef3c7;color:#92400e;">已自定义</span>
+    </div>
+
     <!-- Loading / empty -->
     <SkeletonLoader v-if="loading" :lines="5" />
     <EmptyState v-else-if="!subscriptions.length" text="暂无订阅，点击「添加订阅」开始" />
@@ -197,17 +287,54 @@ function avatarBg(i) {
     <!-- Desktop table (>= 768px) -->
     <div v-else
       class="hidden md:block rounded-[var(--radius-md)] overflow-hidden"
+      data-grid-container
       style="background: var(--bg-primary); border: 1px solid var(--border-light); box-shadow: var(--shadow-xs);">
 
       <!-- Header row -->
       <div class="grid gap-3 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
         :style="{ gridTemplateColumns: getGridStyle(), background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderBottom: '2px solid var(--border-light)' }">
-        <span>公众号</span>
-        <span class="text-center">全部</span>
-        <span class="text-center">已入库</span>
-        <span class="text-center">待入库</span>
-        <span class="text-center">最后轮询</span>
-        <span class="text-center">分类</span>
+        <span style="position:relative;">
+          公众号
+          <div class="resize-handle" @mousedown="onResizeStart($event, 'name')"
+            style="position:absolute;right:-2px;top:0;bottom:0;width:6px;cursor:col-resize;z-index:2;background:transparent;"
+            @mouseenter="e => e.target.style.background='var(--border-base)'"
+            @mouseleave="e => e.target.style.background='transparent'"></div>
+        </span>
+        <span class="text-center" style="position:relative;">
+          全部
+          <div class="resize-handle" @mousedown="onResizeStart($event, 'all')"
+            style="position:absolute;right:-2px;top:0;bottom:0;width:6px;cursor:col-resize;z-index:2;background:transparent;"
+            @mouseenter="e => e.target.style.background='var(--border-base)'"
+            @mouseleave="e => e.target.style.background='transparent'"></div>
+        </span>
+        <span class="text-center" style="position:relative;">
+          已入库
+          <div class="resize-handle" @mousedown="onResizeStart($event, 'ingested')"
+            style="position:absolute;right:-2px;top:0;bottom:0;width:6px;cursor:col-resize;z-index:2;background:transparent;"
+            @mouseenter="e => e.target.style.background='var(--border-base)'"
+            @mouseleave="e => e.target.style.background='transparent'"></div>
+        </span>
+        <span class="text-center" style="position:relative;">
+          待入库
+          <div class="resize-handle" @mousedown="onResizeStart($event, 'non_ingested')"
+            style="position:absolute;right:-2px;top:0;bottom:0;width:6px;cursor:col-resize;z-index:2;background:transparent;"
+            @mouseenter="e => e.target.style.background='var(--border-base)'"
+            @mouseleave="e => e.target.style.background='transparent'"></div>
+        </span>
+        <span class="text-center" style="position:relative;">
+          最后轮询
+          <div class="resize-handle" @mousedown="onResizeStart($event, 'poll')"
+            style="position:absolute;right:-2px;top:0;bottom:0;width:6px;cursor:col-resize;z-index:2;background:transparent;"
+            @mouseenter="e => e.target.style.background='var(--border-base)'"
+            @mouseleave="e => e.target.style.background='transparent'"></div>
+        </span>
+        <span class="text-center" style="position:relative;">
+          分类
+          <div class="resize-handle" @mousedown="onResizeStart($event, 'category')"
+            style="position:absolute;right:-2px;top:0;bottom:0;width:6px;cursor:col-resize;z-index:2;background:transparent;"
+            @mouseenter="e => e.target.style.background='var(--border-base)'"
+            @mouseleave="e => e.target.style.background='transparent'"></div>
+        </span>
         <span class="text-center">操作</span>
       </div>
 
