@@ -31,23 +31,32 @@ except ImportError:
 ENGINE_NAME = "curl_cffi (Chrome TLS)" if HAS_CURL_CFFI else "httpx (fallback)"
 logger.info("HTTP engine: %s", ENGINE_NAME)
 
-BROWSER_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) "
-                  "Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
-              "image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Upgrade-Insecure-Requests": "1",
-}
+import re
+
+from utils.user_agent import random_ua
+
+
+def build_headers() -> dict:
+    """构建带随机 UA 的浏览器请求头。每次调用生成新的 UA 及匹配的 Sec-CH-UA。"""
+    ua = random_ua()
+    chrome_ver_match = re.search(r"Chrome/(\d+)", ua)
+    chrome_major = chrome_ver_match.group(1) if chrome_ver_match else "120"
+
+    return {
+        "User-Agent": ua,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                  "image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Ch-Ua": f'"Not_A Brand";v="8", "Chromium";v="{chrome_major}", "Google Chrome";v="{chrome_major}"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    }
 
 MAX_PROXY_RETRIES = 3
 _executor = ThreadPoolExecutor(max_workers=4)
@@ -65,7 +74,7 @@ async def fetch_page(url: str, extra_headers: Optional[Dict] = None,
     """
     from utils.proxy_pool import proxy_pool
 
-    headers = {**BROWSER_HEADERS}
+    headers = build_headers()
     if extra_headers:
         headers.update(extra_headers)
 
