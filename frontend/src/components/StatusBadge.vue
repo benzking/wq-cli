@@ -6,14 +6,24 @@ defineProps({
 
 <template>
   <span
-    class="inline-flex px-1.5 py-px rounded-[4px] text-[11px] font-semibold whitespace-nowrap"
-    :class="{
-      'bg-[#f0faf2] text-success': type === 'success',
-      'bg-[#fff2f0] text-error': type === 'failed' || type === 'failed_retryable' || type === 'error',
-      'bg-[#fff7e6] text-warning': type === 'pending' || type === 'warning',
-      'bg-accent-light text-accent': type === 'info' || type === 'poll',
-      'bg-[#f9f0ff] text-[#7c3aed]': type === 'deep_fetch',
-      'bg-[#e6f7ff] text-[#1890ff]': type === 'image_download',
+    class="badge"
+    :style="{
+      background:
+        type === 'success'                ? 'var(--success-bg)' :
+        type === 'failed' || type === 'failed_retryable' || type === 'error' ? 'var(--error-bg)' :
+        type === 'pending' || type === 'warning' ? 'var(--warning-bg)' :
+        type === 'deep_fetch'             ? '#f5f0ff' :
+        type === 'image_download'         ? '#e8f4fd' :
+        type === 'info' || type === 'poll' ? 'var(--accent-light)' :
+                                              'var(--bg-hover)',
+      color:
+        type === 'success'                ? 'var(--success)' :
+        type === 'failed' || type === 'failed_retryable' || type === 'error' ? 'var(--error)' :
+        type === 'pending' || type === 'warning' ? 'var(--warning)' :
+        type === 'deep_fetch'             ? '#7c3aed' :
+        type === 'image_download'         ? '#1890ff' :
+        type === 'info' || type === 'poll' ? 'var(--accent)' :
+                                              'var(--text-muted)',
     }"
   >
     <slot />

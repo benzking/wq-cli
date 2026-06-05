@@ -32,7 +32,7 @@ const groups = [
     label: '内容',
     items: [
       { icon: 'browse', label: '文章浏览', to: '/browse' },
-      { icon: 'rss', label: 'RSS 订阅', to: '/rss' },
+      { icon: 'rss', label: '公众号订阅', to: '/rss' },
     ],
   },
   {
@@ -61,28 +61,107 @@ const isActive = (path) => {
 
 <template>
   <aside
-    class="fixed inset-y-0 left-0 z-[100] flex flex-col overflow-hidden border-r border-border-light bg-bg-primary transition-[width] duration-[250ms]"
-    :class="collapsed ? 'w-14' : 'w-[220px]'"
+    class="fixed inset-y-0 left-0 z-[100] flex flex-col overflow-hidden transition-[width] duration-[280ms]"
+    :class="collapsed ? 'w-14' : 'w-[230px]'"
+    style="
+      background: linear-gradient(180deg, #1e2128 0%, #1a1d23 100%);
+      border-right: 1px solid rgba(255,255,255,0.06);
+    "
   >
-    <div class="whitespace-nowrap overflow-hidden border-b border-border-light px-[18px] py-4 text-sm font-bold text-text-primary">
-      WeChat API
+    <!-- Logo -->
+    <div
+      class="flex items-center gap-2.5 overflow-hidden whitespace-nowrap transition-all duration-[280ms]"
+      :class="collapsed ? 'px-[14px] py-3.5 justify-center' : 'px-5 py-3.5'"
+    >
+      <div class="w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0"
+        style="background: linear-gradient(135deg, #5b6e8a 0%, #7a8fa8 100%); box-shadow: 0 2px 8px rgba(91,110,138,0.3);">
+        <span class="text-white text-[15px] font-bold" style="font-family: var(--font-display);">W</span>
+      </div>
+      <span
+        v-show="!collapsed"
+        class="text-[13px] font-semibold tracking-[0.02em] opacity-100 transition-opacity duration-[280ms]"
+        style="color: #e8eaed; font-family: var(--font-display);"
+      >WeChat DAPI</span>
     </div>
-    <nav class="flex-1">
+
+    <!-- Nav -->
+    <nav class="flex-1 overflow-y-auto overflow-x-hidden py-2">
       <div v-for="group in groups" :key="group.label">
-        <div class="mt-2 border-t-2 border-border-light pt-4 pb-1 px-4 text-[10px] font-semibold uppercase tracking-[0.5px] text-text-muted">
-          {{ group.label }}
-        </div>
+        <!-- Group label -->
+        <div
+          v-show="!collapsed"
+          class="px-5 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] opacity-60 transition-opacity duration-[280ms]"
+          style="color: #6b7280;"
+        >{{ group.label }}</div>
+
         <router-link
           v-for="item in group.items"
           :key="item.to"
           :to="item.to"
-          class="flex items-center gap-2.5 whitespace-nowrap overflow-hidden my-0.5 mx-2 py-2 px-4 rounded-sm text-[13px] text-text-secondary no-underline transition duration-150 hover:bg-accent-light hover:text-accent"
-          :class="{ 'bg-accent-light text-accent font-semibold': isActive(item.to) }"
+          class="flex items-center gap-3 whitespace-nowrap overflow-hidden mx-2 my-0.5 transition-all duration-[200ms] rounded-[8px]"
+          :class="collapsed ? 'px-0 py-2.5 justify-center' : 'px-3.5 py-2.5'"
+          :style="isActive(item.to) ? {
+            background: 'rgba(91,110,138,0.18)',
+            color: '#e8eaed',
+            fontWeight: 600,
+          } : {
+            color: '#9ca3af',
+          }"
+          @mouseenter="(e) => {
+            if (!isActive(item.to)) {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+              e.currentTarget.style.color = '#d1d5db'
+            }
+          }"
+          @mouseleave="(e) => {
+            if (!isActive(item.to)) {
+              e.currentTarget.style.background = 'transparent'
+              e.currentTarget.style.color = '#9ca3af'
+            }
+          }"
         >
-          <component :is="iconMap[item.icon]" :size="16" class="shrink-0" />
-          <span>{{ item.label }}</span>
+          <component
+            :is="iconMap[item.icon]"
+            :size="18"
+            class="shrink-0 transition-transform duration-[200ms]"
+            :style="{ opacity: isActive(item.to) ? 1 : 0.55 }"
+          />
+          <span
+            v-show="!collapsed"
+            class="text-[13px] leading-none"
+          >{{ item.label }}</span>
+
+          <!-- Active indicator -->
+          <span
+            v-if="isActive(item.to) && !collapsed"
+            class="ml-auto w-1 h-1 rounded-full shrink-0"
+            style="background: #8ba4c0;"
+          ></span>
         </router-link>
       </div>
     </nav>
+
+    <!-- Footer -->
+    <div
+      class="border-t px-4 py-3 overflow-hidden transition-all duration-[280ms]"
+      style="border-color: rgba(255,255,255,0.06);"
+    >
+      <div
+        class="flex items-center gap-2.5 overflow-hidden whitespace-nowrap"
+        :class="collapsed ? 'justify-center' : ''"
+      >
+        <div
+          class="w-6 h-6 rounded-full shrink-0 flex items-center justify-center"
+          style="background: rgba(255,255,255,0.06);"
+        >
+          <span class="text-[10px] font-semibold" style="color: #6b7280;">v2</span>
+        </div>
+        <span
+          v-show="!collapsed"
+          class="text-[11px] opacity-50"
+          style="color: #9ca3af;"
+        >WeChat Download API</span>
+      </div>
+    </div>
   </aside>
 </template>

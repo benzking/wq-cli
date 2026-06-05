@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { AlertTriangle, X } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 
@@ -53,25 +54,32 @@ function go(to) { router.push(to) }
 </script>
 
 <template>
-  <div v-if="alerts.length" class="alert-stack">
-    <div v-for="a in alerts" :key="a.id" class="alert-item" :class="'alert-' + a.type">
-      <span class="alert-icon">&#9888;</span>
-      <span class="alert-msg">{{ a.message }}</span>
-      <button v-if="a.action" class="alert-action" @click="go(a.to)">{{ a.action.label }}</button>
-      <button class="alert-close" @click="dismiss(a.id)">&times;</button>
+  <div v-if="alerts.length" class="flex flex-col gap-2 pb-2.5">
+    <div
+      v-for="a in alerts"
+      :key="a.id"
+      class="flex items-center gap-3 px-4 py-2.5 rounded-[var(--radius-md)] text-[13px] border"
+      :style="a.type === 'error'
+        ? 'background: var(--error-bg); border-color: rgba(189,60,60,0.2); color: var(--error);'
+        : 'background: var(--warning-bg); border-color: rgba(196,127,45,0.2); color: var(--warning);'"
+    >
+      <AlertTriangle :size="15" class="shrink-0 opacity-80" />
+      <span class="flex-1">{{ a.message }}</span>
+      <button
+        v-if="a.action"
+        class="px-3 py-1 text-[11px] font-medium rounded-[var(--radius-sm)] border cursor-pointer transition-all duration-150 hover:opacity-80"
+        :style="{
+          background: 'var(--bg-primary)',
+          borderColor: 'currentColor',
+          color: 'inherit',
+        }"
+        @click="go(a.to)"
+      >{{ a.action.label }}</button>
+      <button
+        class="flex items-center justify-center w-5 h-5 rounded border-none cursor-pointer opacity-50 hover:opacity-100 transition-opacity"
+        style="background: transparent; color: inherit;"
+        @click="dismiss(a.id)"
+      ><X :size="13" /></button>
     </div>
   </div>
 </template>
-
-<style scoped>
-.alert-stack { display: flex; flex-direction: column; gap: 6px; padding: 0 0 10px 0; }
-.alert-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: var(--radius-md); font-size: 13px; }
-.alert-error { background: #fff5f5; border: 1px solid #ffc9c9; color: #c92a2a; }
-.alert-warning { background: #fff9db; border: 1px solid #ffec99; color: #e67700; }
-.alert-icon { flex-shrink: 0; }
-.alert-msg { flex: 1; }
-.alert-action { padding: 4px 12px; background: var(--bg-primary); border: 1px solid currentColor; border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; color: inherit; }
-.alert-action:hover { opacity: 0.8; }
-.alert-close { background: none; border: none; font-size: 18px; cursor: pointer; color: inherit; opacity: 0.6; padding: 0 2px; }
-.alert-close:hover { opacity: 1; }
-</style>

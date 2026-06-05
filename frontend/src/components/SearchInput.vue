@@ -10,7 +10,7 @@ defineProps({
     v-model="model"
     v-bind="$attrs"
     type="text"
-    class="py-1.5 px-3 border border-border-base rounded-md text-[13px] outline-none bg-bg-primary text-text-primary transition-colors duration-150 focus:border-accent"
+    class="input"
     :placeholder="placeholder"
   />
 </template>

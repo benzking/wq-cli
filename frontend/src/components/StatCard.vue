@@ -9,11 +9,18 @@ defineProps({
 
 <template>
   <div
-    class="bg-bg-primary rounded-lg p-[18px] shadow-sm border border-border-light border-l-[3px] border-l-solid transition-transform transition-shadow duration-150 hover:-translate-y-0.5 hover:shadow-md"
-    :style="{ borderLeftColor: accent || 'transparent' }"
+    class="rounded-[var(--radius-md)] p-5 transition-all duration-[250ms] hover:-translate-y-0.5 hover:shadow-md"
+    style="
+      background: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      box-shadow: var(--shadow-xs);
+      border-left: 3px solid;
+      border-left-color: accent || var(--border-base);
+    "
+    :style="{ borderLeftColor: accent || 'var(--border-base)' }"
   >
-    <div class="text-xs text-text-muted mb-2">{{ label }}</div>
-    <div class="text-[28px] font-bold text-text-primary">{{ value }}</div>
-    <div v-if="sub" class="text-xs text-text-muted mt-1 leading-[1.4]" v-html="sub"></div>
+    <div class="text-[11px] font-semibold uppercase tracking-[0.05em] mb-2" style="color: var(--text-muted);">{{ label }}</div>
+    <div class="text-[30px] font-bold tracking-[-0.02em] leading-none" style="color: var(--text-primary);">{{ value }}</div>
+    <div v-if="sub" class="text-[12px] mt-1.5 leading-[1.5]" style="color: var(--text-muted);" v-html="sub"></div>
   </div>
 </template>
