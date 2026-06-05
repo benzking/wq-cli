@@ -253,8 +253,7 @@ class FetchWorker:
             self._handle_failure(task, fetcher_name, "parse_error", latency_ms, tid)
             return
 
-        mark_success(fakeid, article_link, fetcher_name,
-                     fetcher=fetcher_router.get_label(fetcher_name))
+        mark_success(fakeid, article_link, fetcher=fetcher_router.get_label(fetcher_name))
         insert_fetch_log(fakeid, article_link, fetcher_name, 1,
                          "", "", latency_ms, "queue_worker")
         fetcher_router.record_result(fetcher_name, True)

@@ -131,6 +131,8 @@ class FetcherRouter:
         self.breakers: Dict[str, FetcherCircuitBreaker] = {}
         self._order: List[str] = []
         self._labels: Dict[str, str] = {}
+        self._cf_node_urls: Dict[str, str] = {}
+        self._rr_index = 0
 
     def get_label(self, name: str) -> str:
         """获取渠道的显示名，如 cf节点1-wq1.8419609.xyz、socks5-127.0.0.1:1080、直连"""
@@ -145,6 +147,7 @@ class FetcherRouter:
         cf_urls = get_cf_worker_urls()
 
         self._labels = {}
+        self._cf_node_urls = {}
         names: List[str] = []
         for i, url in enumerate(proxy_urls):
             name = f"proxy_{i}"
@@ -154,6 +157,7 @@ class FetcherRouter:
             name = f"cf_node_{i}"
             names.append(name)
             self._labels[name] = f"cf节点{i+1}-{self._extract_display(url)}"
+            self._cf_node_urls[name] = url
         names.append("direct")
         self._labels["direct"] = "直连"
 
@@ -196,10 +200,11 @@ class FetcherRouter:
 
     def select_fetcher(self, article_link: str,
                        specified: Optional[str] = None) -> Optional[str]:
-        """按优先级选取可用渠道。
+        """按优先级轮转选取可用渠道。
 
         跳过 dead、跳过 cooling、跳过该文章已试过且失败的渠道。
         若 specified 合法且可用，优先使用。
+        多同等优先级的渠道间做轮转分发，让所有节点公平使用。
         """
         from utils.fetch_logs import get_tried_fetchers_for_article
 
@@ -211,13 +216,20 @@ class FetcherRouter:
             if breaker.is_available() and specified not in tried:
                 return specified
 
-        # 按优先级顺序遍历
-        for name in self._order:
-            breaker = self.breakers[name]
-            if not breaker.is_available():
+        # 轮转分发：从 _rr_index 开始遍历，跳过不可用/已试过的
+        n = len(self._order)
+        if n == 0:
+            return None
+        self._rr_index %= n
+        for offset in range(n):
+            idx = (self._rr_index + offset) % n
+            name = self._order[idx]
+            breaker = self.breakers.get(name)
+            if not breaker or not breaker.is_available():
                 continue
             if name in tried:
                 continue
+            self._rr_index = (idx + 1) % n
             return name
 
         return None
@@ -228,6 +240,11 @@ class FetcherRouter:
         """根据渠道名分派到对应的抓取实现"""
         if fetcher_name.startswith("cf_node_"):
             from utils.cf_worker_client import cf_worker_client
+            node_url = self._cf_node_urls.get(fetcher_name)
+            if node_url:
+                # 指定节点直达，FetcherRouter 负责熔断跟踪
+                return await cf_worker_client.fetch(url, node_url=node_url)
+            # 映射不存在时回退到池模式（应对配置瞬态不一致）
             return await cf_worker_client.fetch(url)
         elif fetcher_name.startswith("proxy_"):
             from utils.http_client import fetch_page

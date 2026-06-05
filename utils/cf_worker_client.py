@@ -139,17 +139,38 @@ class CFWorkerClient:
             "circuit_open": self._is_circuit_open(),
         }
 
-    async def fetch(self, article_url: str) -> Optional[str]:
+    async def fetch(self, article_url: str,
+                    node_url: Optional[str] = None) -> Optional[str]:
         """
         通过 CF Worker 代理获取文章内容。
-        返回 HTML 字符串，失败返回 None。
+
+        参数:
+            node_url: 指定具体节点 URL（FetcherRouter 渠道隔离用）。
+                      为 None 时使用内部节点池轮转（兼容旧路径: ArticleFallbackFetcher）。
         """
+        if node_url is not None:
+            # 指定节点模式 — 直达目标，不经过内部池管理（由 FetcherRouter 负责熔断）
+            return await self._do_fetch_url(article_url, node_url)
+
+        # 池模式 — 内部轮转 + 冷却管理
         node = self.next_node()
         if not node:
             logger.warning("[L1] No available CF Worker node")
             return None
 
-        node_url = node.rstrip("/")
+        try:
+            html = await self._do_fetch_url(article_url, node)
+            self.mark_ok(node)
+            return html
+        except Exception as e:
+            logger.warning("[L1] CF Worker pool fetch failed: %s", str(e)[:80])
+            self.mark_failed(node)
+            return None
+
+    async def _do_fetch_url(self, article_url: str,
+                            node_url: str) -> str:
+        """对单个 CF Worker 节点发请求，成功返回 HTML，失败抛异常"""
+        node_url = node_url.rstrip("/")
         encoded_url = quote(article_url, safe="")
         proxy_url = f"{node_url}/?url={encoded_url}&preset=mp"
 
@@ -158,26 +179,18 @@ class CFWorkerClient:
                           "Chrome/120.0.0.0 Safari/537.36",
         }
 
-        try:
-            if self._http_client is None:
-                async with httpx.AsyncClient(timeout=L1_TIMEOUT) as client:
-                    resp = await client.get(proxy_url, headers=headers)
-            else:
-                resp = await self._http_client.get(proxy_url, headers=headers)
+        if self._http_client is None:
+            async with httpx.AsyncClient(timeout=L1_TIMEOUT) as client:
+                resp = await client.get(proxy_url, headers=headers)
+        else:
+            resp = await self._http_client.get(proxy_url, headers=headers)
 
-            if resp.status_code == 200 and len(resp.text) > 500:
-                self.mark_ok(node)
-                return resp.text
+        if resp.status_code == 200 and len(resp.text) > 500:
+            return resp.text
 
-            logger.warning("[L1] CF Worker returned status=%d len=%d",
-                         resp.status_code, len(resp.text))
-            self.mark_failed(node)
-            return None
-
-        except Exception as e:
-            logger.warning("[L1] CF Worker request failed: %s", str(e)[:80])
-            self.mark_failed(node)
-            return None
+        raise Exception(
+            f"CF Worker returned status={resp.status_code} len={len(resp.text)}"
+        )
 
     async def _health_check_loop(self):
         """后台每 300s 探测所有节点"""
