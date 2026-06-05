@@ -37,26 +37,43 @@ from utils.user_agent import random_ua
 
 
 def build_headers() -> dict:
-    """构建带随机 UA 的浏览器请求头。每次调用生成新的 UA 及匹配的 Sec-CH-UA。"""
+    """构建带随机 UA 的浏览器请求头。每次调用生成新的 UA，平台和 CH 头与 UA 匹配。"""
     ua = random_ua()
-    chrome_ver_match = re.search(r"Chrome/(\d+)", ua)
-    chrome_major = chrome_ver_match.group(1) if chrome_ver_match else "120"
 
-    return {
+    headers = {
         "User-Agent": ua,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
                   "image/avif,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
         "Accept-Encoding": "gzip, deflate, br",
-        "Sec-Ch-Ua": f'"Not_A Brand";v="8", "Chromium";v="{chrome_major}", "Google Chrome";v="{chrome_major}"',
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": '"Windows"',
         "Sec-Fetch-Dest": "document",
         "Sec-Fetch-Mode": "navigate",
         "Sec-Fetch-Site": "none",
         "Sec-Fetch-User": "?1",
         "Upgrade-Insecure-Requests": "1",
     }
+
+    # Sec-CH-UA 系列头仅 Chrome/Chromium 系列发送
+    is_chromium = any(b in ua for b in ("Chrome/", "Edg/", "OPR/", "QQBrowser/"))
+    if is_chromium:
+        chrome_ver_match = re.search(r"Chrome/(\d+)", ua)
+        chrome_major = chrome_ver_match.group(1) if chrome_ver_match else "120"
+
+        if "Macintosh" in ua:
+            platform = "macOS"
+        elif "Linux" in ua and "Android" not in ua:
+            platform = "Linux"
+        else:
+            platform = "Windows"
+
+        headers["Sec-Ch-Ua"] = (
+            f'"Not_A Brand";v="8", "Chromium";v="{chrome_major}", '
+            f'"Google Chrome";v="{chrome_major}"'
+        )
+        headers["Sec-Ch-Ua-Mobile"] = "?0"
+        headers["Sec-Ch-Ua-Platform"] = f'"{platform}"'
+
+    return headers
 
 MAX_PROXY_RETRIES = 3
 _executor = ThreadPoolExecutor(max_workers=4)
