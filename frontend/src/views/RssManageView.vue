@@ -102,6 +102,38 @@ function onSubscribed() {
   loadSubscriptions()
 }
 
+// ── single poll ──────────────────────────────────────
+const pollingSet = ref(new Set())
+
+async function handleSinglePoll(fakeid) {
+  if (pollingSet.value.has(fakeid)) return
+  pollingSet.value = new Set([...pollingSet.value, fakeid])
+  try {
+    const res = await fetch(`/api/rss/poll/${fakeid}`, { method: 'POST' })
+    const data = await res.json()
+    if (res.status === 429) {
+      toast.warning(data.detail || '为避免风险，请勿频繁轮询')
+    } else if (data.success) {
+      toast.success(data.message || '已加入轮询队列')
+    } else {
+      toast.error(data.message || '轮询失败')
+    }
+    await loadSubscriptions()
+  } catch (e) {
+    toast.error('网络错误: ' + e.message)
+  } finally {
+    pollingSet.value = new Set([...pollingSet.value].filter(id => id !== fakeid))
+  }
+}
+
+// ── column layout (dynamic grid, will be enhanced in Task 6) ──
+const COL_KEYS = ['name','all','ingested','non_ingested','poll','category','actions']
+const DEFAULT_COLS = { name: 1.5, all: 0.4, ingested: 0.4, non_ingested: 0.4, poll: 0.9, category: 0.8, actions: 1.3 }
+
+function getGridStyle() {
+  return COL_KEYS.map(k => (DEFAULT_COLS[k] || 0.4) + 'fr').join(' ')
+}
+
 // ── helpers ─────────────────────────────────────────
 function getInitial(name) { return (name || '?').charAt(0) }
 function avatarBg(i) {
@@ -168,25 +200,26 @@ function avatarBg(i) {
       style="background: var(--bg-primary); border: 1px solid var(--border-light); box-shadow: var(--shadow-xs);">
 
       <!-- Header row -->
-      <div class="grid grid-cols-[1.5fr_0.6fr_0.6fr_1fr_0.8fr_1.3fr] gap-3 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
-        style="background: var(--bg-secondary); color: var(--text-muted); border-bottom: 2px solid var(--border-light);">
+      <div class="grid gap-3 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
+        :style="{ gridTemplateColumns: getGridStyle(), background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderBottom: '2px solid var(--border-light)' }">
         <span>公众号</span>
-        <span class="text-center">已抓取</span>
-        <span class="text-center">待抓取</span>
-        <span>最后轮询</span>
-        <span>分类</span>
-        <span class="text-right">操作</span>
+        <span class="text-center">全部</span>
+        <span class="text-center">已入库</span>
+        <span class="text-center">待入库</span>
+        <span class="text-center">最后轮询</span>
+        <span class="text-center">分类</span>
+        <span class="text-center">操作</span>
       </div>
 
       <!-- Rows -->
       <div v-for="(s, i) in subscriptions" :key="s.fakeid"
-        class="grid grid-cols-[1.5fr_0.6fr_0.6fr_1fr_0.8fr_1.3fr] gap-3 px-4 py-3 items-center text-[12px] transition-colors duration-150"
-        style="border-bottom: 1px solid var(--border-light);"
+        class="grid gap-3 px-4 py-3 items-center text-[12px] transition-colors duration-150"
+        :style="{ gridTemplateColumns: getGridStyle(), borderBottom: '1px solid var(--border-light)' }"
         @mouseenter="(e) => e.currentTarget.style.background = 'var(--bg-hover)'"
         @mouseleave="(e) => e.currentTarget.style.background = ''">
 
-        <!-- 公众号 -->
-        <div class="flex items-center gap-2.5 min-w-0">
+        <!-- 公众号 — 左对齐 -->
+        <div class="flex items-center gap-2.5 min-w-0" style="text-align:left;">
           <img v-if="s.head_img" :src="s.head_img" class="w-7 h-7 rounded-full shrink-0 object-cover" />
           <div v-else class="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[12px] font-semibold"
             :style="{ background: avatarBg(i).bg, color: avatarBg(i).color }">{{ getInitial(s.nickname) }}</div>
@@ -196,31 +229,37 @@ function avatarBg(i) {
           </div>
         </div>
 
-        <!-- 已抓取 -->
-        <span class="font-semibold text-center tabular-nums" style="color: var(--success);">{{ s.article_count || 0 }}</span>
+        <!-- 全部 -->
+        <span class="font-semibold text-center tabular-nums" style="color: var(--text-primary);">{{ s.article_count || 0 }}</span>
 
-        <!-- 待抓取 -->
-        <span class="font-semibold text-center tabular-nums" :style="{ color: (s.pending_count || 0) > 0 ? 'var(--warning)' : 'var(--text-muted)' }">{{ s.pending_count || 0 }}</span>
+        <!-- 已入库 -->
+        <span class="font-semibold text-center tabular-nums" style="color: var(--success);">{{ s.ingested_count != null ? s.ingested_count : s.article_count }}</span>
+
+        <!-- 待入库 -->
+        <span class="font-semibold text-center tabular-nums" :style="{ color: (s.non_ingested_count || 0) > 0 ? 'var(--warning)' : 'var(--text-muted)' }">{{ s.non_ingested_count || 0 }}</span>
 
         <!-- 最后轮询 -->
-        <span style="color: var(--text-muted);" class="tabular-nums">{{ formatTime(s.last_poll) }}</span>
+        <span style="color: var(--text-muted); text-align:center;" class="tabular-nums">{{ formatTime(s.last_poll) }}</span>
 
-        <!-- 分类标签 -->
-        <span>
+        <!-- 分类 -->
+        <div style="text-align:center;">
           <span v-if="s.category_name" class="badge" :style="catStyle(s)">{{ s.category_name }}</span>
           <span v-else class="badge" style="background: #f3f4f6; color: #9ca3af;">未分类</span>
-        </span>
+        </div>
 
-        <!-- 操作按钮 -->
-        <div class="flex gap-1.5 justify-end">
+        <!-- 操作按钮 — 居中 -->
+        <div class="flex gap-1.5 justify-center">
+          <button class="btn btn-xs" @click="handleSinglePoll(s.fakeid)" title="手动刷新" :disabled="pollingSet.has(s.fakeid)">
+            <RefreshCw :size="11" :class="{ 'animate-spin': pollingSet.has(s.fakeid) }" /> 刷新
+          </button>
           <button class="btn btn-xs" @click="copyLink('/api/rss/' + s.fakeid, 'RSS 链接')" title="复制新文章 RSS">
-            <Rss :size="11" /> 订阅 RSS
+            <Rss :size="11" /> RSS
           </button>
           <button class="btn btn-xs" @click="copyLink('/api/rss/' + s.fakeid + '/history', '历史 RSS')" title="复制历史文章 RSS">
-            <History :size="11" /> 历史 RSS
+            <History :size="11" /> 历史
           </button>
           <button class="btn btn-xs" @click="openCategory(s.fakeid)" title="更改分类">
-            <Tag :size="11" /> 更改分类
+            <Tag :size="11" /> 分类
           </button>
           <button class="btn btn-xs" style="color:var(--error);border-color:rgba(189,60,60,0.25);" @click="openConfirm(s.fakeid)" title="取消订阅">
             <Trash2 :size="11" /> 取消
@@ -247,7 +286,8 @@ function avatarBg(i) {
         </div>
 
         <div class="flex items-center gap-4 text-[11px] mb-3" style="color: var(--text-muted);">
-          <span>已抓取: <b style="color: var(--success);">{{ s.article_count || 0 }}</b></span>
+          <span>已抓取: <b style="color: var(--success);">{{ s.regular_article_count != null ? s.regular_article_count : s.article_count }}</b></span>
+          <span>全部: <b style="color: var(--text-primary);">{{ s.article_count || 0 }}</b></span>
           <span>待抓取: <b :style="{ color: (s.pending_count || 0) > 0 ? 'var(--warning)' : 'var(--text-muted)' }">{{ s.pending_count || 0 }}</b></span>
           <span>轮询: {{ formatTime(s.last_poll) }}</span>
         </div>
