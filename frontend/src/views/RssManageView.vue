@@ -286,14 +286,15 @@ function avatarBg(i) {
         </div>
 
         <div class="flex items-center gap-4 text-[11px] mb-3" style="color: var(--text-muted);">
-          <span>已抓取: <b style="color: var(--success);">{{ s.regular_article_count != null ? s.regular_article_count : s.article_count }}</b></span>
           <span>全部: <b style="color: var(--text-primary);">{{ s.article_count || 0 }}</b></span>
-          <span>待抓取: <b :style="{ color: (s.pending_count || 0) > 0 ? 'var(--warning)' : 'var(--text-muted)' }">{{ s.pending_count || 0 }}</b></span>
+          <span>已入库: <b style="color: var(--success);">{{ s.ingested_count != null ? s.ingested_count : s.article_count }}</b></span>
+          <span>待入库: <b :style="{ color: (s.non_ingested_count || 0) > 0 ? 'var(--warning)' : 'var(--text-muted)' }">{{ s.non_ingested_count || 0 }}</b></span>
           <span>轮询: {{ formatTime(s.last_poll) }}</span>
         </div>
 
         <div class="flex gap-1.5 flex-wrap">
-          <button class="btn btn-xs flex-1" @click="copyLink('/api/rss/' + s.fakeid, 'RSS 链接')"><Rss :size="10" /> 订阅</button>
+          <button class="btn btn-xs flex-1" @click="handleSinglePoll(s.fakeid)" :disabled="pollingSet.has(s.fakeid)"><RefreshCw :size="10" :class="{ 'animate-spin': pollingSet.has(s.fakeid) }" /> 刷新</button>
+          <button class="btn btn-xs flex-1" @click="copyLink('/api/rss/' + s.fakeid, 'RSS 链接')"><Rss :size="10" /> RSS</button>
           <button class="btn btn-xs flex-1" @click="copyLink('/api/rss/' + s.fakeid + '/history', '历史 RSS')"><History :size="10" /> 历史</button>
           <button class="btn btn-xs flex-1" @click="openCategory(s.fakeid)"><Tag :size="10" /> 分类</button>
           <button class="btn btn-xs flex-1" style="color:var(--error);border-color:rgba(189,60,60,0.25);" @click="openConfirm(s.fakeid)"><Trash2 :size="10" /> 取消</button>
