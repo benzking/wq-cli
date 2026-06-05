@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import time
 from typing import List, Dict, Optional
 
@@ -37,6 +38,11 @@ class WechatInvalidFakeidError(Exception):
     触发条件：appmsgpublish 接口返回 ret=200002 且 err_msg="invalid args"
     实测：任何 token+cookie 都无法访问，需要标记为永久失效
     """
+    pass
+
+
+class TokenExpiredError(Exception):
+    """RSS 轮询期间检测到 token 过期（ret=200003），轮询器应立即中断当前轮次。"""
     pass
 
 
@@ -196,12 +202,18 @@ class RSSPoller:
                     )
                 except Exception as bl_err:
                     logger.warning("Failed to blacklist invalid fakeid %s: %s", fakeid[:8], bl_err)
+            except TokenExpiredError:
+                logger.error("Token expired, aborting poll cycle")
+                self.consecutive_failures += 1
+                self.last_fail_time = time.time()
+                self.last_fail_msg = "Token 已过期，请重新扫码登录"
+                break
             except Exception as e:
                 logger.error("RSS poll error for %s: %s", fakeid[:8], e)
                 any_attempt = True
                 if self._first_fail_msg is None:
                     self._first_fail_msg = f"获取 {nickname}({fakeid[:12]}) 文章失败: {str(e)[:100]}"
-            await asyncio.sleep(3)
+            await asyncio.sleep(random.randint(3, 8))
 
         self._current_batch.clear()
 
@@ -218,6 +230,11 @@ class RSSPoller:
                 self._first_fail_msg = None
 
     async def _fetch_article_list(self, fakeid: str, creds: Dict) -> List[Dict]:
+        """通过 fetch_mp_api 获取文章列表。"""
+        from utils.mp_api_client import fetch_mp_api
+
+        use_proxy = os.getenv("MP_API_USE_PROXY", "false").lower() == "true"
+
         params = {
             "sub": "list",
             "search_field": "null",
@@ -233,78 +250,54 @@ class RSSPoller:
             "f": "json",
             "ajax": 1,
         }
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": "https://mp.weixin.qq.com/",
-            "Cookie": creds["cookie"],
-        }
 
-        # [2026-05-15 OS-4] 使用共享 client，省 DNS+TLS 握手
-        # 兜底：若 client 未初始化（理论不会发生），退回到每次新建
-        if self._http_client is not None:
-            resp = await self._http_client.get(
-                "https://mp.weixin.qq.com/cgi-bin/appmsgpublish",
-                params=params,
-                headers=headers,
-            )
-            resp.raise_for_status()
-            result = resp.json()
-        else:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(
-                    "https://mp.weixin.qq.com/cgi-bin/appmsgpublish",
-                    params=params,
-                    headers=headers,
-                )
-                resp.raise_for_status()
-                result = resp.json()
+        result = await fetch_mp_api(
+            "https://mp.weixin.qq.com/cgi-bin/appmsgpublish",
+            params=params, creds=creds, use_proxy=use_proxy,
+        )
 
-        base_resp = result.get("base_resp", {})
-        if base_resp.get("ret") != 0:
-            ret_code = base_resp.get("ret")
-            err_msg = base_resp.get("err_msg", "")
-            logger.warning("WeChat API error for %s: ret=%s err_msg=%r",
-                           fakeid[:8], ret_code, err_msg)
-            # [2026-05-18] 同步 SaaS 修复：ret=200002 + "invalid args" → fakeid 已失效
-            # 老代码统一返回空 → 静默失败，用户感受不到该号已注销
-            # 现在：抛 WechatInvalidFakeidError 让调用方加入黑名单
-            if ret_code == 200002 and "invalid arg" in err_msg.lower():
-                raise WechatInvalidFakeidError(
-                    f"fakeid {fakeid[:8]} 已失效（注销/改名）: {err_msg}"
-                )
-            return []
-
-        publish_page = result.get("publish_page", {})
-        if isinstance(publish_page, str):
-            try:
-                publish_page = json.loads(publish_page)
-            except (json.JSONDecodeError, ValueError):
+        if result.is_ok:
+            assert result.data is not None
+            data = result.data
+            publish_page = data.get("publish_page", {})
+            if isinstance(publish_page, str):
+                try:
+                    publish_page = json.loads(publish_page)
+                except (json.JSONDecodeError, ValueError):
+                    return []
+            if not isinstance(publish_page, dict):
                 return []
 
-        if not isinstance(publish_page, dict):
-            return []
-
-        articles = []
-        for item in publish_page.get("publish_list", []):
-            publish_info = item.get("publish_info", {})
-            if isinstance(publish_info, str):
-                try:
-                    publish_info = json.loads(publish_info)
-                except (json.JSONDecodeError, ValueError):
+            articles = []
+            for item in publish_page.get("publish_list", []):
+                publish_info = item.get("publish_info", {})
+                if isinstance(publish_info, str):
+                    try:
+                        publish_info = json.loads(publish_info)
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+                if not isinstance(publish_info, dict):
                     continue
-            if not isinstance(publish_info, dict):
-                continue
-            for a in publish_info.get("appmsgex", []):
-                articles.append({
-                    "aid": a.get("aid", ""),
-                    "title": a.get("title", ""),
-                    "link": a.get("link", ""),
-                    "digest": a.get("digest", ""),
-                    "cover": a.get("cover", ""),
-                    "author": a.get("author", ""),
-                    "publish_time": a.get("update_time", 0),
-                })
-        return articles
+                for a in publish_info.get("appmsgex", []):
+                    articles.append({
+                        "aid": a.get("aid", ""),
+                        "title": a.get("title", ""),
+                        "link": a.get("link", ""),
+                        "digest": a.get("digest", ""),
+                        "cover": a.get("cover", ""),
+                        "author": a.get("author", ""),
+                        "publish_time": a.get("update_time", 0),
+                    })
+            return articles
+
+        if result.error_type == "invalid_fakeid":
+            raise WechatInvalidFakeidError(
+                f"fakeid {fakeid[:8]} 已失效（注销/改名）"
+            )
+        if result.error_type == "token_expired":
+            raise TokenExpiredError("登录过期，请重新扫码登录")
+        logger.warning("Poll skip for %s: error_type=%s", fakeid[:8], result.error_type)
+        return []
 
     async def poll_now(self):
         """手动触发一次轮询"""
