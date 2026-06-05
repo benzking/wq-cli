@@ -170,12 +170,14 @@ async def get_subscriptions(request: Request):
         fakeid = s['fakeid']
         # 统计历史文章数量
         historical_count = rss_store.count_historical_articles(fakeid)
+        pending_count = rss_store.count_pending_articles(fakeid)
         items.append({
             **s,
             "head_img": head_img,
             "rss_url": f"{base_url}/api/rss/{fakeid}",
             "historical_rss_url": f"{base_url}/api/rss/{fakeid}/history" if historical_count > 0 else "",
             "historical_count": historical_count,
+            "pending_count": pending_count,
         })
 
     return SubscriptionListResponse(success=True, data=items)

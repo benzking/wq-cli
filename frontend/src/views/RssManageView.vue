@@ -1,19 +1,23 @@
 <script setup>
-import { onMounted, inject, ref } from 'vue'
+import { onMounted, inject, ref, computed } from 'vue'
 import { useRss } from '@/composables/useRss'
-import SearchInput from '@/components/SearchInput.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
+import SubscribeModal from '@/components/SubscribeModal.vue'
+import CategoryPickerModal from '@/components/CategoryPickerModal.vue'
+import ConfirmModal from '@/components/ConfirmModal.vue'
+import { Rss, History, Tag, Trash2, Plus, RefreshCw, Copy } from 'lucide-vue-next'
 
 const toast = inject('toast')
 const baseUrl = window.location.origin
 
 const {
-  subscriptions, searchResults, query, loading, searchLoading,
-  pollerStatus, loadSubscriptions, loadStatus, searchBiz, subscribe,
+  subscriptions, loading,
+  pollerStatus, loadSubscriptions, loadStatus,
   unsubscribe, setCategory, triggerPoll, exportUrl,
 } = useRss()
 
+// ── categories ──────────────────────────────────────
 const categories = ref([])
 async function loadCategories() {
   const res = await fetch('/api/admin/categories')
@@ -21,24 +25,17 @@ async function loadCategories() {
   if (data.categories) categories.value = data.categories
 }
 
+// ── modals state ────────────────────────────────────
+const showSubscribe = ref(false)
+const categoryTarget = ref(null)
+const confirmTarget = ref(null)
+
 onMounted(() => { loadSubscriptions(); loadStatus(); loadCategories() })
 
-async function handleSearch() {
-  const kw = query.value?.trim?.() || ''
-  if (!kw) { toast.warning('请输入公众号名称'); return }
-  await searchBiz(kw)
-}
+// ── computed ────────────────────────────────────────
+const subscriptionIdList = computed(() => subscriptions.value.map(s => s.fakeid))
 
-async function handleSubscribe(fakeid, nickname, alias, headImg) {
-  const r = await subscribe(fakeid, nickname, alias, headImg)
-  toast[r.success ? 'success' : 'error'](r.success ? '订阅成功' : (r.detail || '订阅失败'))
-}
-
-async function handleUnsubscribe(fakeid, name) {
-  const r = await unsubscribe(fakeid)
-  toast[r.success ? 'success' : 'error'](r.success ? `已取消订阅 ${name}` : (r.detail || '取消失败'))
-}
-
+// ── actions ─────────────────────────────────────────
 async function handlePoll() {
   const r = await triggerPoll()
   toast[r.success ? 'success' : 'error'](r.success ? '轮询已触发' : (r.detail || '触发失败'))
@@ -49,167 +46,253 @@ function formatTime(ts) {
   return new Date(ts * 1000).toLocaleString('zh-CN')
 }
 
-function openWindow(url) { window.open(url, '_blank') }
-
-function copyRssLink(url) {
+function copyLink(url, label) {
   const full = baseUrl + url
-  const el = document.createElement('textarea')
-  el.value = full
-  el.style.position = 'fixed'
-  el.style.left = '-9999px'
-  document.body.appendChild(el)
-  el.select()
-  try {
-    document.execCommand('copy')
-    toast.success('RSS 链接已复制')
-  } catch {
-    toast.error('复制失败，请手动复制')
+  const doCopy = () => {
+    const el = document.createElement('textarea')
+    el.value = full; el.style.position = 'fixed'; el.style.left = '-9999px'
+    document.body.appendChild(el)
+    el.select(); document.execCommand('copy'); document.body.removeChild(el)
+    toast.success(label + ' 已复制')
   }
-  document.body.removeChild(el)
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(full).then(() => toast.success(label + ' 已复制')).catch(doCopy)
+  } else {
+    doCopy()
+  }
 }
 
-function onSearchKeydown(e) {
-  if (e.key === 'Enter') handleSearch()
+// ── category colors (前端映射) ───────────────────────
+const catColorMap = { blue: '#3b82f6', green: '#22c55e', red: '#ef4444', purple: '#a855f7', yellow: '#eab308', teal: '#0d9488', orange: '#f97316', pink: '#ec4899' }
+const catBgMap = { blue: '#eff6ff', green: '#f0fdf4', red: '#fef2f2', purple: '#f5f3ff', yellow: '#fefce8', teal: '#f0fdfa', orange: '#fff7ed', pink: '#fdf2f8' }
+
+function catStyle(cat) {
+  if (!cat?.category_name) return { background: '#f3f4f6', color: '#9ca3af' }
+  const color = cat.category_color || 'gray'
+  return { background: catBgMap[color] || '#f3f4f6', color: catColorMap[color] || '#6b7280' }
+}
+
+// ── category picker ─────────────────────────────────
+function openCategory(fakeid) { categoryTarget.value = fakeid }
+async function handleCategorySelect(categoryId) {
+  if (!categoryTarget.value) return
+  await setCategory(categoryTarget.value, categoryId)
+  await loadSubscriptions()
+  categoryTarget.value = null
+}
+
+// ── unsubscribe confirm ─────────────────────────────
+const confirmName = computed(() => {
+  if (!confirmTarget.value) return ''
+  const s = subscriptions.value.find(x => x.fakeid === confirmTarget.value)
+  return s?.nickname || s?.alias || confirmTarget.value
+})
+
+function openConfirm(fakeid) { confirmTarget.value = fakeid }
+async function handleConfirmUnsubscribe() {
+  if (!confirmTarget.value) return
+  const r = await unsubscribe(confirmTarget.value)
+  toast[r.success ? 'success' : 'error'](r.success ? '已取消订阅' : (r.detail || '取消失败'))
+  confirmTarget.value = null
+}
+
+// ── subscribe success ───────────────────────────────
+function onSubscribed() {
+  toast.success('订阅成功')
+  loadSubscriptions()
+}
+
+// ── helpers ─────────────────────────────────────────
+function getInitial(name) { return (name || '?').charAt(0) }
+function avatarBg(i) {
+  const colors = ['#dbeafe','#fce7f3','#fef3c7','#dcfce7','#ede9fe','#fee2e2']
+  const txts = ['#2563eb','#be185d','#b45309','#16a34a','#7c3aed','#dc2626']
+  return { bg: colors[i % colors.length], color: txts[i % txts.length] }
 }
 </script>
 
 <template>
-  <div class="rss-page">
+  <div>
+    <!-- Page title -->
     <Teleport to="#topbar-title">
-      <h1 class="text-[20px] font-bold text-text-primary">RSS 订阅管理</h1>
+      <h1 class="text-[18px] font-bold tracking-[-0.01em]" style="color: var(--text-primary); font-family: var(--font-display);">公众号订阅</h1>
     </Teleport>
 
-    <div class="status-bar">
-      <div class="status-dot" :class="{ running: pollerStatus.running }">
-        <span class="dot"></span>
-        {{ pollerStatus.running ? '轮询器运行中' : '轮询器已停止' }}
-        <span v-if="pollerStatus.next_poll" class="next-poll">下次: {{ formatTime(pollerStatus.next_poll) }}</span>
+    <!-- Status bar -->
+    <div class="flex items-center justify-between px-4 py-3 rounded-[var(--radius-md)] mb-4 gap-3 flex-wrap"
+      style="background: var(--bg-primary); border: 1px solid var(--border-light); box-shadow: var(--shadow-xs);">
+      <div class="flex items-center gap-3">
+        <span class="flex items-center gap-1.5 text-[12px]" style="color: var(--text-secondary);">
+          <span class="w-[7px] h-[7px] rounded-full" :style="pollerStatus.running ? 'background:var(--success);box-shadow:0 0 6px rgba(59,140,94,0.4)' : 'background:var(--text-muted)'"></span>
+          {{ pollerStatus.running ? '轮询器运行中' : '轮询器已停止' }}
+        </span>
+        <span v-if="pollerStatus.next_poll" class="text-[11px]" style="color: var(--text-muted);">下次: {{ formatTime(pollerStatus.next_poll) }}</span>
       </div>
-      <div v-if="pollerStatus.consecutive_failures > 0" class="poll-alert" :class="pollerStatus.consecutive_failures >= 3 ? 'poll-error' : 'poll-warn'">
+
+      <div v-if="pollerStatus.consecutive_failures > 0"
+        class="text-[11px] px-2.5 py-1 rounded-full text-xs"
+        :style="pollerStatus.consecutive_failures >= 3
+          ? 'background: var(--error-bg); color: var(--error);'
+          : 'background: var(--warning-bg); color: var(--warning);'">
         最近 {{ pollerStatus.consecutive_failures }} 次轮询失败
-        <span v-if="pollerStatus.last_fail_msg" class="poll-fail-msg">: {{ pollerStatus.last_fail_msg }}</span>
+        <span v-if="pollerStatus.last_fail_msg" class="opacity-70">: {{ pollerStatus.last_fail_msg }}</span>
       </div>
-      <div class="status-actions">
-        <button class="btn" @click="handlePoll">立即轮询</button>
-        <input class="agg-rss" readonly :value="baseUrl + '/api/rss/all'" @focus="$event.target.select()" />
-        <button class="btn btn-sm" @click="copyRssLink('/api/rss/all')">复制聚合 RSS</button>
+
+      <div class="flex items-center gap-2">
+        <button class="btn btn-sm" @click="copyLink('/api/rss/all', '聚合 RSS')">
+          <Copy :size="12" /> 复制聚合 RSS
+        </button>
+        <button class="btn btn-primary btn-sm" @click="handlePoll">
+          <RefreshCw :size="12" /> 立即轮询
+        </button>
       </div>
     </div>
 
-    <div class="search-section">
-      <h3>添加订阅</h3>
-      <div class="search-row">
-        <input
-          v-model="query"
-          type="text"
-          class="search-input"
-          placeholder="输入公众号名称搜索..."
-          @keydown.enter="handleSearch"
-        />
-        <button class="btn btn-primary" @click="handleSearch" :disabled="searchLoading">搜索</button>
+    <!-- Header + add button -->
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-[14px] font-semibold" style="color: var(--text-primary);">
+        已订阅 ({{ subscriptions.length }})
+      </h3>
+      <button class="btn btn-primary btn-sm" @click="showSubscribe = true">
+        <Plus :size="14" /> 添加订阅
+      </button>
+    </div>
+
+    <!-- Loading / empty -->
+    <SkeletonLoader v-if="loading" :lines="5" />
+    <EmptyState v-else-if="!subscriptions.length" text="暂无订阅，点击「添加订阅」开始" />
+
+    <!-- Desktop table (>= 768px) -->
+    <div v-else
+      class="hidden md:block rounded-[var(--radius-md)] overflow-hidden"
+      style="background: var(--bg-primary); border: 1px solid var(--border-light); box-shadow: var(--shadow-xs);">
+
+      <!-- Header row -->
+      <div class="grid grid-cols-[1.5fr_0.6fr_0.6fr_1fr_0.8fr_1.3fr] gap-3 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
+        style="background: var(--bg-secondary); color: var(--text-muted); border-bottom: 2px solid var(--border-light);">
+        <span>公众号</span>
+        <span class="text-center">已抓取</span>
+        <span class="text-center">待抓取</span>
+        <span>最后轮询</span>
+        <span>分类</span>
+        <span class="text-right">操作</span>
       </div>
 
-      <div v-if="searchResults.length" class="search-results">
-        <div v-for="r in searchResults" :key="r.fakeid" class="search-item">
-          <img v-if="r.round_head_img" :src="r.round_head_img" class="sr-avatar" />
-          <div v-else class="sr-avatar-placeholder">{{ (r.nickname || '').charAt(0) }}</div>
-          <span class="sr-name">{{ r.nickname }}</span>
-          <span class="sr-alias">{{ r.alias }}</span>
-          <button class="btn btn-sm btn-primary" @click="handleSubscribe(r.fakeid, r.nickname, r.alias, r.round_head_img)">订阅</button>
+      <!-- Rows -->
+      <div v-for="(s, i) in subscriptions" :key="s.fakeid"
+        class="grid grid-cols-[1.5fr_0.6fr_0.6fr_1fr_0.8fr_1.3fr] gap-3 px-4 py-3 items-center text-[12px] transition-colors duration-150"
+        style="border-bottom: 1px solid var(--border-light);"
+        @mouseenter="(e) => e.currentTarget.style.background = 'var(--bg-hover)'"
+        @mouseleave="(e) => e.currentTarget.style.background = ''">
+
+        <!-- 公众号 -->
+        <div class="flex items-center gap-2.5 min-w-0">
+          <img v-if="s.head_img" :src="s.head_img" class="w-7 h-7 rounded-full shrink-0 object-cover" />
+          <div v-else class="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[12px] font-semibold"
+            :style="{ background: avatarBg(i).bg, color: avatarBg(i).color }">{{ getInitial(s.nickname) }}</div>
+          <div class="min-w-0">
+            <div class="font-semibold truncate leading-snug" style="color: var(--text-primary);">{{ s.nickname || s.fakeid }}</div>
+            <div v-if="s.alias" class="text-[10px] truncate leading-snug" style="color: var(--text-muted);">{{ s.alias }}</div>
+          </div>
+        </div>
+
+        <!-- 已抓取 -->
+        <span class="font-semibold text-center tabular-nums" style="color: var(--success);">{{ s.article_count || 0 }}</span>
+
+        <!-- 待抓取 -->
+        <span class="font-semibold text-center tabular-nums" :style="{ color: (s.pending_count || 0) > 0 ? 'var(--warning)' : 'var(--text-muted)' }">{{ s.pending_count || 0 }}</span>
+
+        <!-- 最后轮询 -->
+        <span style="color: var(--text-muted);" class="tabular-nums">{{ formatTime(s.last_poll) }}</span>
+
+        <!-- 分类标签 -->
+        <span>
+          <span v-if="s.category_name" class="badge" :style="catStyle(s)">{{ s.category_name }}</span>
+          <span v-else class="badge" style="background: #f3f4f6; color: #9ca3af;">未分类</span>
+        </span>
+
+        <!-- 操作按钮 -->
+        <div class="flex gap-1.5 justify-end">
+          <button class="btn btn-xs" @click="copyLink('/api/rss/' + s.fakeid, 'RSS 链接')" title="复制新文章 RSS">
+            <Rss :size="11" /> 订阅 RSS
+          </button>
+          <button class="btn btn-xs" @click="copyLink('/api/rss/' + s.fakeid + '/history', '历史 RSS')" title="复制历史文章 RSS">
+            <History :size="11" /> 历史 RSS
+          </button>
+          <button class="btn btn-xs" @click="openCategory(s.fakeid)" title="更改分类">
+            <Tag :size="11" /> 更改分类
+          </button>
+          <button class="btn btn-xs" style="color:var(--error);border-color:rgba(189,60,60,0.25);" @click="openConfirm(s.fakeid)" title="取消订阅">
+            <Trash2 :size="11" /> 取消
+          </button>
         </div>
       </div>
     </div>
 
-    <section class="section">
-      <h3>已订阅 ({{ subscriptions.length }})</h3>
-      <SkeletonLoader v-if="loading" :lines="4" />
-      <EmptyState v-else-if="!subscriptions.length" text="暂无订阅，搜索公众号并添加订阅" />
-      <div v-else class="sub-grid">
-        <div v-for="s in subscriptions" :key="s.fakeid" class="sub-card">
-          <div class="sub-card-top">
-            <img v-if="s.head_img" :src="s.head_img" class="sub-avatar" />
-            <span v-else class="sub-avatar-placeholder">{{ (s.nickname || s.fakeid || '').charAt(0) }}</span>
-            <div class="sub-info">
-              <div class="sub-name">{{ s.nickname || s.alias || s.fakeid }}</div>
-              <div class="sub-meta">{{ s.article_count || 0 }} 篇 · 最后轮询 {{ formatTime(s.last_poll) }}</div>
+    <!-- Mobile cards (< 768px) -->
+    <div v-if="!loading && subscriptions.length" class="md:hidden flex flex-col gap-2.5">
+      <div v-for="(s, i) in subscriptions" :key="s.fakeid" class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <img v-if="s.head_img" :src="s.head_img" class="w-7 h-7 rounded-full shrink-0 object-cover" />
+            <div v-else class="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[12px] font-semibold"
+              :style="{ background: avatarBg(i).bg, color: avatarBg(i).color }">{{ getInitial(s.nickname) }}</div>
+            <div class="min-w-0">
+              <div class="font-semibold text-[13px] leading-snug truncate" style="color: var(--text-primary);">{{ s.nickname }}</div>
+              <div v-if="s.alias" class="text-[10px] leading-snug" style="color: var(--text-muted);">{{ s.alias }}</div>
             </div>
           </div>
-          <div class="sub-card-bottom">
-            <select class="cat-select" @change="setCategory(s.fakeid, Number($event.target.value) || null)">
-              <option :value="s.category_id || null">{{ s.category_name || '未分类' }}</option>
-              <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-            </select>
-            <button class="btn btn-sm" @click="copyRssLink('/api/rss/all?fakeid=' + s.fakeid)">复制 RSS</button>
-            <button class="btn btn-sm" @click="openWindow('/api/rss/' + s.fakeid + '/history')">历史 RSS</button>
-            <button class="btn btn-sm btn-danger" @click="handleUnsubscribe(s.fakeid, s.nickname || s.alias)">取消订阅</button>
-          </div>
+          <span v-if="s.category_name" class="badge shrink-0" :style="catStyle(s)">{{ s.category_name }}</span>
+          <span v-else class="badge shrink-0" style="background: #f3f4f6; color: #9ca3af;">未分类</span>
+        </div>
+
+        <div class="flex items-center gap-4 text-[11px] mb-3" style="color: var(--text-muted);">
+          <span>已抓取: <b style="color: var(--success);">{{ s.article_count || 0 }}</b></span>
+          <span>待抓取: <b :style="{ color: (s.pending_count || 0) > 0 ? 'var(--warning)' : 'var(--text-muted)' }">{{ s.pending_count || 0 }}</b></span>
+          <span>轮询: {{ formatTime(s.last_poll) }}</span>
+        </div>
+
+        <div class="flex gap-1.5 flex-wrap">
+          <button class="btn btn-xs flex-1" @click="copyLink('/api/rss/' + s.fakeid, 'RSS 链接')"><Rss :size="10" /> 订阅</button>
+          <button class="btn btn-xs flex-1" @click="copyLink('/api/rss/' + s.fakeid + '/history', '历史 RSS')"><History :size="10" /> 历史</button>
+          <button class="btn btn-xs flex-1" @click="openCategory(s.fakeid)"><Tag :size="10" /> 分类</button>
+          <button class="btn btn-xs flex-1" style="color:var(--error);border-color:rgba(189,60,60,0.25);" @click="openConfirm(s.fakeid)"><Trash2 :size="10" /> 取消</button>
         </div>
       </div>
-    </section>
+    </div>
 
-    <section class="section">
-      <h3>导出订阅</h3>
-      <div class="export-row">
-        <a :href="exportUrl('csv')" class="btn" target="_blank">导出 CSV</a>
-        <a :href="exportUrl('opml')" class="btn" target="_blank">导出 OPML</a>
-      </div>
-    </section>
+    <!-- Export -->
+    <div class="flex items-center gap-3 mt-6 pt-4" style="border-top: 1px solid var(--border-light);">
+      <span class="text-[11px] font-semibold uppercase tracking-[0.05em]" style="color: var(--text-muted);">导出订阅</span>
+      <a :href="exportUrl('csv')" class="btn btn-sm" target="_blank">导出 CSV</a>
+      <a :href="exportUrl('opml')" class="btn btn-sm" target="_blank">导出 OPML</a>
+    </div>
+
+    <!-- Modals -->
+    <SubscribeModal
+      :visible="showSubscribe"
+      :subscription-ids="subscriptionIdList"
+      @close="showSubscribe = false"
+      @subscribed="onSubscribed"
+    />
+
+    <CategoryPickerModal
+      :visible="!!categoryTarget"
+      :categories="categories"
+      :current-category-id="categoryTarget ? subscriptions.find(s => s.fakeid === categoryTarget)?.category_id : null"
+      @select="handleCategorySelect"
+      @close="categoryTarget = null"
+    />
+
+    <ConfirmModal
+      :show="!!confirmTarget"
+      title="确认取消订阅"
+      :message="'确定取消订阅「' + confirmName + '」吗？取消后不再轮询该公众号，但已缓存的文章数据会保留。'"
+      confirm-text="确认取消"
+      cancel-text="再想想"
+      :danger="true"
+      @confirm="handleConfirmUnsubscribe"
+      @cancel="confirmTarget = null"
+    />
   </div>
 </template>
-
-<style scoped>
-.status-bar {
-  display: flex; align-items: center; justify-content: space-between;
-  background: var(--bg-primary); border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg); padding: 14px 18px; margin-bottom: 16px;
-}
-.status-dot { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
-.running .dot { background: var(--success); box-shadow: 0 0 6px rgba(47,158,68,0.4); }
-.next-poll { font-size: 11px; color: var(--text-muted); }
-.poll-alert { font-size: 12px; padding: 4px 12px; border-radius: 12px; flex-shrink: 0; }
-.poll-warn { background: #fff3bf; color: #e67700; }
-.poll-error { background: #ffe3e3; color: #c92a2a; }
-.poll-fail-msg { opacity: 0.7; font-size: 11px; }
-.agg-rss { width: 220px; padding: 6px 10px; border: 1px solid var(--border-base); border-radius: var(--radius-sm); font-size: 11px; background: var(--bg-secondary); }
-
-.search-section {
-  background: var(--bg-primary); border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg); padding: 18px; margin-bottom: 24px;
-}
-.search-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
-.search-row { display: flex; gap: 8px; }
-.search-input {
-  flex: 1; padding: 8px 14px; border: 1px solid var(--border-base); border-radius: var(--radius-md);
-  font-size: 14px; outline: none; background: var(--bg-primary); color: var(--text-primary);
-  transition: border-color 150ms;
-}
-.search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
-.search-results { margin-top: 12px; border: 1px solid var(--border-light); border-radius: var(--radius-md); overflow: hidden; }
-.search-item { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border-light); }
-.sr-avatar { width: 28px; height: 28px; border-radius: 50%; }
-.sr-avatar-placeholder { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent); flex-shrink: 0; }
-.sr-name { font-size: 13px; font-weight: 600; }
-.sr-alias { font-size: 11px; color: var(--text-muted); margin-right: auto; }
-
-.section { margin-bottom: 24px; }
-.section h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
-.sub-grid { display: flex; flex-direction: column; gap: 8px; }
-.sub-card {
-  background: var(--bg-primary); border: 1px solid var(--border-light);
-  border-radius: var(--radius-md); padding: 14px 16px;
-  display: flex; flex-direction: column; gap: 10px;
-}
-.sub-card-top { display: flex; align-items: center; gap: 10px; }
-.sub-avatar { width: 32px; height: 32px; border-radius: 50%; }
-.sub-avatar-placeholder {
-  width: 32px; height: 32px; border-radius: 50%; background: var(--accent-light);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; font-weight: 600; color: var(--accent); flex-shrink: 0;
-}
-.sub-name { font-size: 14px; font-weight: 600; }
-.sub-meta { font-size: 12px; color: var(--text-muted); }
-.sub-card-bottom { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.cat-select { padding: 4px 8px; border: 1px solid var(--border-base); border-radius: var(--radius-sm); font-size: 12px; }
-.export-row { display: flex; gap: 8px; }
-</style>

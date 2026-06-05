@@ -112,7 +112,7 @@ def init_db():
             publish_time INTEGER NOT NULL DEFAULT 0,
             fetched_at  INTEGER NOT NULL,
             UNIQUE(fakeid, link),
-            FOREIGN KEY (fakeid) REFERENCES subscriptions(fakeid) ON DELETE CASCADE
+            FOREIGN KEY (fakeid) REFERENCES subscriptions(fakeid) -- 不设 CASCADE，取消订阅保留缓存
         );
 
         CREATE INDEX IF NOT EXISTS idx_articles_fakeid_time
@@ -214,9 +214,13 @@ def add_subscription(fakeid: str, nickname: str = "",
 
 
 def remove_subscription(fakeid: str) -> bool:
+    """取消订阅——仅删除 subscriptions 记录，保留 articles 缓存"""
     conn = _get_conn()
     try:
+        # 临时关闭外键约束，避免已有数据库 ON DELETE CASCADE 误删数据
+        conn.execute("PRAGMA foreign_keys=OFF")
         conn.execute("DELETE FROM subscriptions WHERE fakeid=?", (fakeid,))
+        conn.execute("PRAGMA foreign_keys=ON")
         conn.commit()
         return conn.total_changes > 0
     finally:
@@ -381,6 +385,20 @@ def count_historical_articles(fakeid: str) -> int:
             "SELECT COUNT(DISTINCT a.id) as cnt FROM articles a "
             "INNER JOIN ingestion_logs il ON a.fakeid = il.fakeid AND a.link = il.article_link "
             "WHERE a.fakeid=? AND il.channel='deep_fetch'",
+            (fakeid,),
+        ).fetchone()
+        return row["cnt"] if row else 0
+    finally:
+        conn.close()
+
+
+def count_pending_articles(fakeid: str) -> int:
+    """统计待入库文章数 — ingestion_logs 中 status='pending' 的数量"""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM ingestion_logs "
+            "WHERE fakeid=? AND status='pending'",
             (fakeid,),
         ).fetchone()
         return row["cnt"] if row else 0
