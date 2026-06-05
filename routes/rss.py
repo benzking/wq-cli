@@ -345,19 +345,16 @@ async def get_single_rss_feed(
 ):
     """返回单个公众号的 RSS XML"""
     base_url = get_base_url(request)
+    sub = rss_store.get_subscription(fakeid)
+    if not sub:
+        raise HTTPException(status_code=404, detail="订阅不存在")
     articles = rss_store.get_regular_articles(fakeid, limit=limit)
-    if not articles:
-        subs = rss_store.list_subscriptions()
-        nickname_map = {s["fakeid"]: s.get("nickname") or s["fakeid"] for s in subs}
-    else:
-        from utils.image_proxy import proxy_content_images
-        nickname_map = {}
-        for a in articles:
-            nickname_map[a["fakeid"]] = a.get("nickname") or a["fakeid"]
-            if a.get("content"):
-                a["content"] = proxy_content_images(a["content"], base_url)
+    from utils.image_proxy import proxy_content_images
+    for a in articles:
+        if a.get("content"):
+            a["content"] = proxy_content_images(a["content"], base_url)
     return StreamingResponse(
-        generate_single_rss_stream(articles, nickname_map, base_url),
+        generate_single_rss_stream(fakeid, sub, articles, base_url),
         media_type="application/xml; charset=utf-8",
     )
 
