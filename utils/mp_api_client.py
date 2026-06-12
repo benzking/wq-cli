@@ -139,10 +139,10 @@ def _fetch_sync_curl(
     kwargs = {"timeout": timeout, "allow_redirects": True}
     if proxy:
         kwargs["proxy"] = proxy
-    with _get_session() as session:
-        resp = session.get(url, params=params, headers=headers, **kwargs)
-        resp.raise_for_status()
-        return resp.json()
+    session = _get_session()
+    resp = session.get(url, params=params, headers=headers, **kwargs)
+    resp.raise_for_status()
+    return resp.json()
 
 
 async def _fetch_httpx_fallback(
