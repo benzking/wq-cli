@@ -16,7 +16,7 @@ import logging
 import os
 import random
 import time
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set
 
 import httpx
 
@@ -59,6 +59,14 @@ class RSSPoller:
     last_fail_msg = None
     _first_fail_msg = None
     _current_batch: set = set()
+    _current_fakeid: Optional[str] = None
+    _current_nickname: Optional[str] = None
+    _batch_total: int = 0
+    _batch_done: int = 0
+    _batch_fakeids: List[str] = []
+    _batch_nicknames: Dict[str, str] = {}
+    _batch_completed: set = set()
+    _last_poll_time: float = 0.0
 
     def is_in_current_batch(self, fakeid: str) -> bool:
         """判断 fakeid 是否在当前轮询批次中（用于'已在队列'判断）"""
@@ -68,6 +76,46 @@ class RSSPoller:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
+
+    @property
+    def status(self) -> dict:
+        now = time.time()
+        next_poll = None
+        if self._last_poll_time:
+            next_poll_ts = self._last_poll_time + POLL_INTERVAL
+            next_poll = {
+                "timestamp": next_poll_ts,
+                "in_seconds": max(0, int(next_poll_ts - now)),
+            }
+
+        batch_detail = None
+        if self._batch_total > 0 and self._batch_fakeids:
+            batch_detail = []
+            for fid in self._batch_fakeids:
+                if fid == self._current_fakeid:
+                    st = "current"
+                elif fid in self._batch_completed:
+                    st = "done"
+                else:
+                    st = "pending"
+                batch_detail.append({
+                    "fakeid": fid,
+                    "nickname": self._batch_nicknames.get(fid, ""),
+                    "status": st,
+                })
+
+        return {
+            "running": self._running,
+            "poll_interval": POLL_INTERVAL,
+            "current_fakeid": self._current_fakeid,
+            "current_nickname": self._current_nickname,
+            "batch_progress": {
+                "done": min(self._batch_done, self._batch_total),
+                "total": self._batch_total,
+            } if self._batch_total > 0 else None,
+            "batch_detail": batch_detail,
+            "next_poll": next_poll,
+        }
 
     async def start(self):
         if self._running:
@@ -83,6 +131,13 @@ class RSSPoller:
 
     async def stop(self):
         self._running = False
+        self._current_fakeid = None
+        self._current_nickname = None
+        self._batch_total = 0
+        self._batch_done = 0
+        self._batch_fakeids.clear()
+        self._batch_nicknames.clear()
+        self._batch_completed.clear()
         if self._task:
             self._task.cancel()
             try:
@@ -108,6 +163,8 @@ class RSSPoller:
                 await self._poll_all()
             except Exception as e:
                 logger.error("RSS poll cycle error: %s", e, exc_info=True)
+                self._current_fakeid = None
+                self._current_nickname = None
             await asyncio.sleep(POLL_INTERVAL)
 
     async def _poll_all(self):
@@ -126,6 +183,14 @@ class RSSPoller:
         # 过滤掉黑名单中的公众号
         active_fakeids = [f for f in fakeids if f not in blacklisted]
         self._current_batch = set(active_fakeids)
+        self._batch_total = len(active_fakeids)
+        self._batch_done = 0
+        self._batch_fakeids = list(active_fakeids)
+        self._batch_nicknames = {}
+        for fid in active_fakeids:
+            sub = rss_store.get_subscription(fid)
+            self._batch_nicknames[fid] = sub.get("nickname", "") if sub else ""
+        self._batch_completed.clear()
         skipped = len(fakeids) - len(active_fakeids)
         
         if skipped > 0:
@@ -138,6 +203,8 @@ class RSSPoller:
         any_attempt = False
 
         for fakeid in active_fakeids:
+            self._current_fakeid = fakeid
+            self._current_nickname = self._batch_nicknames.get(fakeid, "")
             sub = rss_store.get_subscription(fakeid)
             nickname = sub.get("nickname", "") if sub else ""
             try:
@@ -145,6 +212,8 @@ class RSSPoller:
                 if not articles:
                     logger.info("轮询器 拉取 %s(%s) 返回 0 篇文章", nickname, fakeid[:12])
                     rss_store.update_last_poll(fakeid)
+                    self._batch_done += 1
+                    self._batch_completed.add(fakeid)
                     continue
                 any_attempt = True
 
@@ -212,8 +281,18 @@ class RSSPoller:
                 any_attempt = True
                 if self._first_fail_msg is None:
                     self._first_fail_msg = f"获取 {nickname}({fakeid[:12]}) 文章失败: {str(e)[:100]}"
+            self._batch_done += 1
+            self._batch_completed.add(fakeid)
             await asyncio.sleep(random.randint(3, 8))
 
+        self._current_fakeid = None
+        self._current_nickname = None
+        self._batch_total = 0
+        self._batch_done = 0
+        self._batch_fakeids.clear()
+        self._batch_nicknames.clear()
+        self._batch_completed.clear()
+        self._last_poll_time = time.time()
         self._current_batch.clear()
 
         if any_attempt:
