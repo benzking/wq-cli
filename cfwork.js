@@ -8,9 +8,11 @@ const PRESETS = {
 };
 
 
-function error(msg, status = 400) {
-    return new Response(msg, {
+function error(code, status = 400, retry = false) {
+    const body = JSON.stringify({ error: code, retry });
+    return new Response(body, {
         status: status,
+        headers: { "Content-Type": "application/json" },
     });
 }
 
@@ -48,7 +50,7 @@ async function parseRequest(req) {
                     decodeURIComponent(searchParams.get("headers")),
                 );
             } catch (_) {
-                throw new Error("headers not valid");
+                throw { code: "invalid_headers", status: 400, retry: false };
             }
         }
         if (searchParams.has("preset")) {
@@ -85,20 +87,20 @@ async function parseRequest(req) {
             preset = payload.preset;
         }
     } else {
-        throw new Error("Method not implemented");
+        throw { code: "method_not_allowed", status: 405, retry: false };
     }
 
     if (!targetURL) {
-        throw new Error("URL not found");
+        throw { code: "no_url", status: 400, retry: false };
     }
     if (!/^https?:\/\//.test(targetURL)) {
-        throw new Error("URL not valid");
+        throw { code: "invalid_url", status: 400, retry: false };
     }
     if (targetMethod === "GET" && targetBody) {
-        throw new Error("GET method can't has body");
+        throw { code: "get_body_not_allowed", status: 400, retry: false };
     }
     if (Object.prototype.toString.call(targetHeaders) !== "[object Object]") {
-        throw new Error("Headers not valid");
+        throw { code: "invalid_headers", status: 400, retry: false };
     }
     if (!targetHeaders["User-Agent"]) {
         targetHeaders["User-Agent"] = UA;
@@ -202,7 +204,18 @@ export default {
                 headers: respHeaders,
             });
         } catch (err) {
-            return error(err.message);
+            console.log(JSON.stringify({
+                event: "proxy_fail",
+                trace: traceId,
+                error: err.code || "internal_error",
+                latency_ms: Date.now() - t0,
+                target: (err.target || targetURL || reqUrl.href).substring(0, 80),
+            }));
+
+            if (err.code) {
+                return error(err.code, err.status || 400, err.retry !== false);
+            }
+            return error("internal_error", 500, false);
         }
     }
 };
