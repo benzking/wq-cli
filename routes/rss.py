@@ -221,17 +221,9 @@ async def poller_status():
     获取 RSS 轮询器运行状态。
     """
     subs = rss_store.list_subscriptions()
-    return PollerStatusResponse(
-        success=True,
-        data={
-            "running": rss_poller.is_running,
-            "poll_interval": POLL_INTERVAL,
-            "subscription_count": len(subs),
-            "consecutive_failures": getattr(rss_poller, 'consecutive_failures', 0),
-            "last_fail_time": getattr(rss_poller, 'last_fail_time', None),
-            "last_fail_msg": getattr(rss_poller, 'last_fail_msg', None),
-        },
-    )
+    data = rss_poller.status
+    data["subscription_count"] = len(subs)
+    return PollerStatusResponse(success=True, data=data)
 
 
 @router.post("/rss/poll/{fakeid}", response_model=SubscribeResponse,
