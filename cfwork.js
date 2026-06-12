@@ -183,12 +183,23 @@ export default {
                 throw { code: "upstream_unreachable", status: 502, retry: true, target: targetURL };
             }
 
+            console.log(JSON.stringify({
+                event: "proxy_ok",
+                trace: traceId,
+                status: response.status,
+                latency_ms: Date.now() - t0,
+                target: targetURL.substring(0, 80),
+            }));
+
+            const respHeaders = new Headers(response.headers);
+            respHeaders.set("Access-Control-Allow-Origin", origin || "*");
+            respHeaders.set("Access-Control-Max-Age", "86400");
+            respHeaders.set("X-Trace-Id", traceId);
+
             return new Response(response.body, {
-                headers: {
-                    "Access-Control-Allow-Origin": origin,
-                    "Access-Control-Max-Age": "86400",
-                    "Content-Type": response.headers.get("Content-Type"),
-                },
+                status: response.status,
+                statusText: response.statusText,
+                headers: respHeaders,
             });
         } catch (err) {
             return error(err.message);
