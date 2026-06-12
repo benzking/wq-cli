@@ -227,6 +227,11 @@ class RSSPoller:
                 self.last_fail_time = time.time()
                 self.last_fail_msg = self._first_fail_msg or "所有订阅的轮询均失败"
                 self._first_fail_msg = None
+        else:
+            self.consecutive_failures = 0
+            self.last_fail_time = None
+            self.last_fail_msg = None
+            self._first_fail_msg = None
 
     async def _fetch_article_list(self, fakeid: str, creds: Dict) -> List[Dict]:
         """通过 fetch_mp_api 获取文章列表。"""
