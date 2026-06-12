@@ -478,6 +478,23 @@ def pending_count() -> int:
         conn.close()
 
 
+def pending_per_fakeid() -> Dict[str, int]:
+    conn = _get_conn()
+    try:
+        now = time.time()
+        rows = conn.execute(
+            "SELECT i.fakeid, COUNT(*) AS cnt FROM ingestion_logs i "
+            "INNER JOIN subscriptions s ON i.fakeid = s.fakeid "
+            "WHERE i.status IN ('pending', 'failed_retryable') "
+            "  AND i.next_retry_at <= ? "
+            "GROUP BY i.fakeid",
+            (now,),
+        ).fetchall()
+        return {r["fakeid"]: r["cnt"] for r in rows}
+    finally:
+        conn.close()
+
+
 def cleanup_old_ingestion(retain_days: int = 30):
     cutoff = time.time() - retain_days * 86400
     conn = _get_conn()
