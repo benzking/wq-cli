@@ -204,7 +204,7 @@ class CFWorkerClient:
                 logger.error("Health check error: %s", e)
 
     async def _probe_all(self):
-        """对所有节点发健康探测请求"""
+        """对所有节点发健康探测请求，优先 /health，fallback 到旧方式"""
         nodes = self._get_nodes()
         if not nodes:
             return
@@ -212,8 +212,19 @@ class CFWorkerClient:
         for node in nodes:
             try:
                 node_url = node.rstrip("/")
-                probe_url = f"{node_url}/?url={quote('https://mp.weixin.qq.com', safe='')}&preset=mp"
                 client = self._http_client or httpx.AsyncClient(timeout=10.0)
+
+                # 优先用 /health 轻量端点
+                try:
+                    resp = await client.get(f"{node_url}/health")
+                    if resp.status_code == 200:
+                        self.mark_ok(node)
+                        continue
+                except Exception:
+                    pass
+
+                # 降级：旧节点不支持 /health，用原方式探测
+                probe_url = f"{node_url}/?url={quote('https://mp.weixin.qq.com', safe='')}&preset=mp"
                 resp = await client.get(probe_url)
                 if resp.status_code == 200:
                     self.mark_ok(node)
