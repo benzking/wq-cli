@@ -427,11 +427,11 @@ function avatarBg(i) {
           <button class="btn btn-xs" @click="copyLink('/api/rss/' + s.fakeid + '/history', '历史 RSS')" title="复制历史文章 RSS">
             <History :size="11" /> 历史
           </button>
+          <button class="btn btn-xs shrink-0" @click="openHistoryFetch(s.fakeid, s.nickname)" title="深度获取历史文章">
+            深度获取
+          </button>
           <button class="btn btn-xs" @click="openCategory(s.fakeid)" title="更改分类">
             <Tag :size="11" /> 分类
-          </button>
-          <button class="btn btn-xs" @click="openHistoryFetch(s.fakeid, s.nickname)" title="深度获取历史文章">
-            深度获取
           </button>
           <button class="btn btn-xs" style="color:var(--error);border-color:rgba(189,60,60,0.25);" @click="openConfirm(s.fakeid)" title="取消订阅">
             <Trash2 :size="11" /> 取消
@@ -468,8 +468,8 @@ function avatarBg(i) {
           <button class="btn btn-xs flex-1" @click="handleSinglePoll(s.fakeid)" :disabled="pollingSet.has(s.fakeid)"><RefreshCw :size="10" :class="{ 'animate-spin': pollingSet.has(s.fakeid) }" /> 刷新</button>
           <button class="btn btn-xs flex-1" @click="copyLink('/api/rss/' + s.fakeid, 'RSS 链接')"><Rss :size="10" /> RSS</button>
           <button class="btn btn-xs flex-1" @click="copyLink('/api/rss/' + s.fakeid + '/history', '历史 RSS')"><History :size="10" /> 历史</button>
+          <button class="btn btn-xs flex-1 shrink-0" @click="openHistoryFetch(s.fakeid, s.nickname)">深度获取</button>
           <button class="btn btn-xs flex-1" @click="openCategory(s.fakeid)"><Tag :size="10" /> 分类</button>
-          <button class="btn btn-xs flex-1" @click="openHistoryFetch(s.fakeid, s.nickname)">深度获取</button>
           <button class="btn btn-xs flex-1" style="color:var(--error);border-color:rgba(189,60,60,0.25);" @click="openConfirm(s.fakeid)"><Trash2 :size="10" /> 取消</button>
         </div>
       </div>
@@ -536,6 +536,7 @@ function avatarBg(i) {
                 class="w-20 py-1.5 px-2.5 border rounded-md text-[13px] outline-none"
                 style="border-color: var(--border-base); color: var(--text-primary); background: var(--bg-primary);"
                 :disabled="historyFetchLoading"
+                @keydown.enter="confirmHistoryFetch"
               />
               <span class="text-[11px]" style="color: var(--text-muted);">篇 (1-100)</span>
             </div>
