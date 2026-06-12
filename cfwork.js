@@ -118,16 +118,17 @@ async function parseRequest(req) {
     };
 }
 
+const FETCH_TIMEOUT_MS = 12000;
+
 /**
- * 代理请求
+ * 带超时的代理请求
  */
-function wfetch(url, method, body, headers = {}) {
+async function proxyFetch(url, method, body, headers = {}) {
     return fetch(url, {
         method: method,
         body: body || undefined,
-        headers: {
-            ...headers,
-        },
+        headers: new Headers(headers),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
 }
 
@@ -167,12 +168,20 @@ export default {
             } = await parseRequest(request);
 
             // 代理请求
-            const response = await wfetch(
-                targetURL,
-                targetMethod,
-                targetBody,
-                targetHeaders,
-            );
+            let response;
+            try {
+                response = await proxyFetch(
+                    targetURL,
+                    targetMethod,
+                    targetBody,
+                    targetHeaders,
+                );
+            } catch (e) {
+                if (e.name === "TimeoutError" || e.name === "AbortError") {
+                    throw { code: "upstream_timeout", status: 504, retry: true, target: targetURL };
+                }
+                throw { code: "upstream_unreachable", status: 502, retry: true, target: targetURL };
+            }
 
             return new Response(response.body, {
                 headers: {
