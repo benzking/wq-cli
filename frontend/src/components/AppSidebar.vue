@@ -3,7 +3,7 @@ import { inject, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   LayoutDashboard, BookOpen, Rss, ArrowDownToLine,
-  ScrollText, HardDrive, Settings, QrCode, ShieldCheck,
+  ScrollText, HardDrive, Settings, QrCode, ShieldCheck, Activity,
 } from 'lucide-vue-next'
 
 const collapsed = inject('sidebarCollapsed')
@@ -19,6 +19,7 @@ const iconMap = {
   settings: Settings,
   login: QrCode,
   verify: ShieldCheck,
+  status: Activity,
 }
 
 const groups = [
@@ -47,6 +48,7 @@ const groups = [
   {
     label: '系统',
     items: [
+      { icon: 'status', label: '服务状态', to: '/status' },
       { icon: 'login', label: '扫码登录', to: '/login' },
       { icon: 'verify', label: '验证码处理', to: '/verify' },
     ],

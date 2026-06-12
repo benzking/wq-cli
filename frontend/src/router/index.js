@@ -10,6 +10,7 @@ const routes = [
   { path: '/settings/:tab?', name: 'settings', component: () => import('@/views/SettingsView.vue') },
   { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue') },
   { path: '/verify', name: 'verify', component: () => import('@/views/VerifyView.vue') },
+  { path: '/status', name: 'status', component: () => import('@/views/StatusView.vue') },
 ]
 
 const router = createRouter({
