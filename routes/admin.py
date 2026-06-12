@@ -445,10 +445,18 @@ async def _fetch_history_internal(fakeid: str, target_count: int) -> tuple:
     
     # 截取到目标数量
     historical_articles = historical_articles[:target_count]
-    
+
     # 保存到数据库（去重）
     new_count = rss_store.save_articles(fakeid, historical_articles)
-    
+
+    # 将新文章链接写入待办清单，唤醒 Worker 抓取正文
+    links = [a["link"] for a in historical_articles if a.get("link")]
+    if links:
+        from utils.ingestion_store import log_ingestion_start
+        log_ingestion_start(fakeid, links, channel="deep_fetch")
+        from utils.fetch_worker import fetch_worker
+        fetch_worker.wake()
+
     return len(historical_articles), new_count
 
 
