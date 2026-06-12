@@ -277,16 +277,18 @@ function avatarBg(i) {
           <span class="w-[7px] h-[7px] rounded-full" :style="pollerStatus.running ? 'background:var(--success);box-shadow:0 0 6px rgba(59,140,94,0.4)' : 'background:var(--text-muted)'"></span>
           {{ pollerStatus.running ? '轮询器运行中' : '轮询器已停止' }}
         </span>
-        <span v-if="pollerStatus.next_poll" class="text-[11px]" style="color: var(--text-muted);">下次: {{ formatTime(pollerStatus.next_poll) }}</span>
-      </div>
-
-      <div v-if="pollerStatus.consecutive_failures > 0"
-        class="text-[11px] px-2.5 py-1 rounded-full text-xs"
-        :style="pollerStatus.consecutive_failures >= 3
-          ? 'background: var(--error-bg); color: var(--error);'
-          : 'background: var(--warning-bg); color: var(--warning);'">
-        最近 {{ pollerStatus.consecutive_failures }} 次轮询失败
-        <span v-if="pollerStatus.last_fail_msg" class="opacity-70">: {{ pollerStatus.last_fail_msg }}</span>
+        <template v-if="pollerStatus.batch_progress">
+          <span class="text-[12px] font-semibold" style="color: var(--success);">
+            {{ pollerStatus.batch_progress.done }}/{{ pollerStatus.batch_progress.total }}
+          </span>
+          <span v-if="pollerStatus.current_nickname" class="text-[11px]" style="color: var(--text-secondary);">
+            当前: {{ pollerStatus.current_nickname }}
+          </span>
+        </template>
+        <span v-else-if="pollerStatus.next_poll" class="text-[11px]" style="color: var(--text-muted);">
+          空闲中 · 下次: {{ formatTime(pollerStatus.next_poll.timestamp) }}
+        </span>
+        <span v-else class="text-[11px]" style="color: var(--text-muted);">等待首次轮询</span>
       </div>
 
       <div class="flex items-center gap-2">
