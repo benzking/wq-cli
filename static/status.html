@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务状态 - WeChat Download API</title>
+    <style>
+        :root {
+            --primary: #1890ff;
+            --success: #52c41a;
+            --warning: #fa8c16;
+            --error: #ff4d4f;
+            --text: #262626;
+            --text2: #595959;
+            --muted: #8c8c8c;
+            --bg: #ffffff;
+            --bg2: #fafafa;
+            --border: #f0f0f0;
+            --border2: #d9d9d9;
+            --radius: 8px;
+            --shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg2);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        .layout { max-width: 1000px; margin:0 auto; padding:24px 20px; }
+        .header {
+            display:flex; align-items:center; justify-content:space-between;
+            margin-bottom:24px;
+        }
+        .header h1 { font-size:22px; font-weight:700; }
+        .refresh-info {
+            font-size:12px; color:var(--muted);
+            display:flex; align-items:center; gap:6px;
+        }
+        .refresh-dot {
+            width:8px; height:8px; border-radius:50%; display:inline-block;
+        }
+        .refresh-dot.active { background:var(--success); }
+        .refresh-dot.idle { background:var(--warning); }
+
+        .section {
+            background:var(--bg); border:1px solid var(--border);
+            border-radius:12px; box-shadow:var(--shadow);
+            padding:20px; margin-bottom:20px;
+        }
+        .section h2 {
+            font-size:16px; font-weight:600;
+            display:flex; align-items:center; gap:8px;
+            margin-bottom:16px;
+        }
+        .info-row {
+            display:flex; align-items:center; gap:8px;
+            padding:6px 0; font-size:14px;
+        }
+        .info-row .lbl { color:var(--muted); font-weight:500; min-width:80px; }
+        .info-row .val { color:var(--text); font-weight:600; overflow:hidden; text-overflow:ellipsis; }
+        .info-row .val a { color:var(--primary); text-decoration:none; }
+        .info-row .val a:hover { text-decoration:underline; }
+
+        table { width:100%; border-collapse:collapse; font-size:13px; }
+        th { text-align:left; padding:8px 10px; font-weight:600; color:var(--muted);
+             border-bottom:2px solid var(--border); background:var(--bg2); }
+        td { padding:8px 10px; border-bottom:1px solid var(--border); }
+        .tag {
+            display:inline-block; padding:2px 8px; border-radius:4px;
+            font-size:11px; font-weight:600;
+        }
+        .tag.done { background:#f6ffed; color:var(--success); }
+        .tag.current { background:#e6f7ff; color:var(--primary); }
+        .tag.pending { background:#fffbe6; color:var(--warning); }
+
+        .scroll-list { max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius); }
+
+        .nav-back {
+            display:inline-flex; align-items:center; gap:4px;
+            font-size:13px; color:var(--primary); text-decoration:none;
+            margin-bottom:16px;
+        }
+        .nav-back:hover { text-decoration:underline; }
+
+        .btn-sm {
+            padding:4px 12px; border-radius:6px; font-size:12px; font-weight:600;
+            cursor:pointer; border:1px solid var(--border2); background:var(--bg); color:var(--text);
+        }
+        .btn-sm:hover { border-color:var(--primary); color:var(--primary); }
+
+        .footer {
+            margin-top:24px; padding-top:16px; border-top:1px solid var(--border);
+            text-align:center; font-size:12px; color:var(--muted);
+        }
+        .loading { color:var(--muted); font-size:14px; padding:20px; text-align:center; }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <a href="/admin.html" class="nav-back">&larr; 返回首页</a>
+
+        <div class="header">
+            <h1>服务状态</h1>
+            <div class="refresh-info">
+                <span class="refresh-dot active" id="refreshDot"></span>
+                <span id="refreshLabel">自适应刷新</span>
+            </div>
+        </div>
+
+        <!-- Worker Section -->
+        <div class="section" id="workerSection">
+            <h2>入库 Worker</h2>
+            <div class="loading" id="workerLoading">加载中...</div>
+            <div id="workerContent" style="display:none">
+                <div class="info-row"><span class="lbl">状态:</span>
+                    <span class="val" id="workerStatus">-</span>
+                    <button class="btn-sm" onclick="togglePause()" id="pauseBtn">暂停</button>
+                </div>
+                <div class="info-row"><span class="lbl">队列:</span>
+                    <span class="val" id="workerQueueCount">-</span> 篇待抓取
+                </div>
+                <div class="info-row" id="workerCurrentRow" style="display:none">
+                    <span class="lbl">当前:</span>
+                    <span class="val" id="workerCurrentTask"></span>
+                </div>
+
+                <h3 style="font-size:14px;margin:12px 0 8px">渠道列表</h3>
+                <table>
+                    <thead><tr><th>状态</th><th>名称</th><th>阶段</th></tr></thead>
+                    <tbody id="fetcherTableBody">
+                        <tr><td colspan="3">加载中...</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 style="font-size:14px;margin:12px 0 8px">按公众号队列深度</h3>
+                <div class="scroll-list">
+                    <table>
+                        <thead><tr><th>公众号</th><th>FakeID</th><th>待抓取</th></tr></thead>
+                        <tbody id="queueDepthBody">
+                            <tr><td colspan="3">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Poller Section -->
+        <div class="section" id="pollerSection">
+            <h2>RSS 轮询器</h2>
+            <div class="loading" id="pollerLoading">加载中...</div>
+            <div id="pollerContent" style="display:none">
+                <div class="info-row"><span class="lbl">状态:</span>
+                    <span class="val" id="pollerStatus">-</span>
+                    <span style="font-size:12px;color:var(--muted)" id="pollerSubCount"></span>
+                </div>
+                <div class="info-row" id="pollerProgressRow">
+                    <span class="lbl">进度:</span>
+                    <span class="val" id="pollerProgress">-</span>
+                </div>
+                <div class="info-row" id="pollerCurrentRow2" style="display:none">
+                    <span class="lbl">当前:</span>
+                    <span class="val" id="pollerCurrentNickname2">-</span>
+                </div>
+
+                <h3 style="font-size:14px;margin:12px 0 8px">本批次详情</h3>
+                <div class="scroll-list" id="batchDetailContainer">
+                    <table>
+                        <thead><tr><th>状态</th><th>公众号</th><th>FakeID</th></tr></thead>
+                        <tbody id="batchDetailBody">
+                            <tr><td colspan="3">暂无进行中的批次</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">WeChat Download API &middot; <a href="/admin.html">返回首页</a></div>
+    </div>
+
+    <script>
+        var _statusTimer = null;
+        var _refreshInterval = 3000;
+
+        function updateWorkerSection(data) {
+            var statusEl = document.getElementById('workerStatus');
+            if (!data.running) {
+                statusEl.textContent = '\u25a0 已停止';
+                statusEl.style.color = 'var(--error)';
+            } else if (data.paused) {
+                statusEl.textContent = '\u275a 已暂停';
+                statusEl.style.color = 'var(--warning)';
+            } else {
+                statusEl.textContent = '\u25cf 运行中';
+                statusEl.style.color = 'var(--success)';
+            }
+
+            var pauseBtn = document.getElementById('pauseBtn');
+            if (data.paused) { pauseBtn.textContent = '恢复'; } else { pauseBtn.textContent = '暂停'; }
+
+            document.getElementById('workerQueueCount').textContent = data.pending_count ?? 0;
+
+            var curRow = document.getElementById('workerCurrentRow');
+            var curEl = document.getElementById('workerCurrentTask');
+            if (data.current_task) {
+                curRow.style.display = '';
+                var title = data.current_task.title || '未知';
+                var link = data.current_task.link || '#';
+                var nickname = data.current_task.nickname || data.current_task.fakeid || '';
+                curEl.innerHTML = '<a href="' + link + '" target="_blank">'
+                    + escapeHtml(nickname) + ' \u00b7 ' + escapeHtml(title) + '</a>';
+            } else {
+                curRow.style.display = 'none';
+            }
+
+            var fetcherTbody = document.getElementById('fetcherTableBody');
+            if (data.fetchers && data.fetchers.length > 0) {
+                var html = '';
+                for (var i = 0; i < data.fetchers.length; i++) {
+                    var f = data.fetchers[i];
+                    var active = data.current_task && data.current_task.fetcher === f.name;
+                    var icon = f.state === 'active' ? (active ? '\ud83d\udfe2' : '\u2705') : f.state === 'cooling' ? '\u23f3' : '\u274c';
+                    var stateText = active ? '正在抓取' : (f.state === 'active' ? '空闲' : f.state === 'cooling' ? '冷却中' : '已熔断');
+                    html += '<tr><td>' + icon + '</td><td>' + escapeHtml(f.label || f.name) + '</td><td>' + stateText + '</td></tr>';
+                }
+                fetcherTbody.innerHTML = html;
+            } else {
+                fetcherTbody.innerHTML = '<tr><td colspan="3" style="color:var(--muted);text-align:center">暂无渠道</td></tr>';
+            }
+
+            var depthTbody = document.getElementById('queueDepthBody');
+            if (data.per_fakeid_pending) {
+                var keys = Object.keys(data.per_fakeid_pending);
+                if (keys.length > 0) {
+                    keys.sort(function(a, b) { return (data.per_fakeid_pending[b] || 0) - (data.per_fakeid_pending[a] || 0); });
+                    var html = '';
+                    var maxShow = Math.min(keys.length, 20);
+                    for (var i = 0; i < maxShow; i++) {
+                        var fid = keys[i];
+                        var cnt = data.per_fakeid_pending[fid];
+                        html += '<tr><td>' + escapeHtml(fid) + '</td><td style="font-family:monospace;font-size:12px">' + fid.slice(0, 12) + '...</td><td>' + cnt + '</td></tr>';
+                    }
+                    if (keys.length > 20) {
+                        html += '<tr><td colspan="3" style="color:var(--muted);text-align:center">... 还有 ' + (keys.length - 20) + ' 个 fakeid</td></tr>';
+                    }
+                    depthTbody.innerHTML = html;
+                } else {
+                    depthTbody.innerHTML = '<tr><td colspan="3" style="color:var(--muted);text-align:center">队列为空</td></tr>';
+                }
+            } else {
+                depthTbody.innerHTML = '<tr><td colspan="3" style="color:var(--muted);text-align:center">暂无数据</td></tr>';
+            }
+
+            document.getElementById('workerLoading').style.display = 'none';
+            document.getElementById('workerContent').style.display = 'block';
+        }
+
+        function updatePollerSection(data) {
+            var statusEl = document.getElementById('pollerStatus');
+            if (!data.running) {
+                statusEl.textContent = '\u25a0 已停止';
+                statusEl.style.color = 'var(--error)';
+            } else {
+                statusEl.textContent = '\u25cf 运行中';
+                statusEl.style.color = 'var(--success)';
+            }
+
+            document.getElementById('pollerSubCount').textContent =
+                '(订阅: ' + (data.subscription_count || '?') + ' 个公众号)';
+
+            var progressEl = document.getElementById('pollerProgress');
+            var curRow = document.getElementById('pollerCurrentRow2');
+            var curEl = document.getElementById('pollerCurrentNickname2');
+
+            if (data.batch_progress) {
+                progressEl.textContent = data.batch_progress.done + ' / ' + data.batch_progress.total;
+                if (data.current_nickname) {
+                    curRow.style.display = '';
+                    curEl.textContent = data.current_nickname;
+                } else {
+                    curRow.style.display = 'none';
+                }
+            } else if (data.next_poll) {
+                var d = new Date(data.next_poll.timestamp * 1000);
+                var timeStr = d.toTimeString().slice(0, 8);
+                var mins = Math.round(data.next_poll.in_seconds / 60);
+                progressEl.textContent = '空闲中  下次轮询: ' + timeStr + ' (约 ' + mins + ' 分钟后)';
+                curRow.style.display = 'none';
+            } else if (data.running) {
+                progressEl.textContent = '空闲中  等待首次轮询';
+                curRow.style.display = 'none';
+            } else {
+                progressEl.textContent = '未启动';
+                curRow.style.display = 'none';
+            }
+
+            var detailBody = document.getElementById('batchDetailBody');
+            if (data.batch_detail && data.batch_detail.length > 0) {
+                var html = '';
+                for (var i = 0; i < data.batch_detail.length; i++) {
+                    var item = data.batch_detail[i];
+                    var tagText = item.status === 'done' ? '\u2705 已完成' : item.status === 'current' ? '\u23f3 当前' : '\u2610 待处理';
+                    html += '<tr><td><span class="tag ' + item.status + '">' + tagText + '</span></td>'
+                        + '<td>' + escapeHtml(item.nickname || '-') + '</td>'
+                        + '<td style="font-family:monospace;font-size:12px">' + (item.fakeid ? item.fakeid.slice(0, 12) + '...' : '-') + '</td></tr>';
+                }
+                detailBody.innerHTML = html;
+            } else {
+                detailBody.innerHTML = '<tr><td colspan="3" style="color:var(--muted);text-align:center">暂无进行中的批次</td></tr>';
+            }
+
+            document.getElementById('pollerLoading').style.display = 'none';
+            document.getElementById('pollerContent').style.display = 'block';
+        }
+
+        async function togglePause() {
+            try {
+                var r = await fetch('/api/admin/ingestion/worker/pause', { method: 'POST' });
+                var d = await r.json();
+                if (d.success) { refreshStatus(); }
+            } catch (e) { console.error('togglePause error:', e); }
+        }
+
+        async function refreshStatus() {
+            var busy = false;
+            try {
+                var [wRes, pRes] = await Promise.all([
+                    fetch('/api/admin/ingestion/worker-status'),
+                    fetch('/api/rss/status'),
+                ]);
+                if (!wRes.ok || !pRes.ok) throw new Error('fetch failed');
+                var wData = (await wRes.json()).data;
+                var pData = (await pRes.json()).data;
+                if (wData) updateWorkerSection(wData);
+                if (pData) updatePollerSection(pData);
+                busy = !!(wData && wData.current_task) || !!(pData && pData.batch_progress);
+            } catch (e) {
+                console.error('Status refresh error:', e);
+            }
+            var next = busy ? 3000 : 10000;
+            if (next !== _refreshInterval) {
+                _refreshInterval = next;
+                clearInterval(_statusTimer);
+                _statusTimer = setInterval(refreshStatus, _refreshInterval);
+            }
+            var dot = document.getElementById('refreshDot');
+            var label = document.getElementById('refreshLabel');
+            if (busy) {
+                dot.className = 'refresh-dot active';
+                label.textContent = '自适应刷新 \u25cf 3s（活跃）';
+            } else {
+                dot.className = 'refresh-dot idle';
+                label.textContent = '自适应刷新 \u25cf 10s（空闲）';
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        window.addEventListener('load', function() {
+            refreshStatus();
+        });
+    </script>
+</body>
+</html>
