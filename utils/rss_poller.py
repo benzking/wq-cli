@@ -142,11 +142,11 @@ class RSSPoller:
             nickname = sub.get("nickname", "") if sub else ""
             try:
                 articles = await self._fetch_article_list(fakeid, creds)
-                any_attempt = True
                 if not articles:
                     logger.info("轮询器 拉取 %s(%s) 返回 0 篇文章", nickname, fakeid[:12])
                     rss_store.update_last_poll(fakeid)
                     continue
+                any_attempt = True
 
                 logger.info("轮询器 拉取 %s(%s) 最新 %d 篇，开始对比",
                            nickname, fakeid[:12], len(articles))
@@ -204,9 +204,8 @@ class RSSPoller:
                     logger.warning("Failed to blacklist invalid fakeid %s: %s", fakeid[:8], bl_err)
             except TokenExpiredError:
                 logger.error("Token expired, aborting poll cycle")
-                self.consecutive_failures += 1
-                self.last_fail_time = time.time()
-                self.last_fail_msg = "Token 已过期，请重新扫码登录"
+                any_attempt = True
+                self._first_fail_msg = "Token 已过期，请重新扫码登录"
                 break
             except Exception as e:
                 logger.error("RSS poll error for %s: %s", fakeid[:8], e)
