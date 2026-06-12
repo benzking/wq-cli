@@ -133,6 +133,30 @@ function wfetch(url, method, body, headers = {}) {
 
 export default {
     async fetch(request) {
+        const t0 = Date.now();
+        const traceId = crypto.randomUUID().substring(0, 8);
+
+        const reqUrl = new URL(request.url);
+
+        if (reqUrl.pathname === "/health") {
+            return new Response(JSON.stringify({status: "ok"}), {
+                status: 200,
+                headers: {"Content-Type": "application/json"},
+            });
+        }
+
+        if (request.method.toUpperCase() === "OPTIONS") {
+            return new Response(null, {
+                status: 204,
+                headers: {
+                    "Access-Control-Allow-Origin": request.headers.get("origin") || "*",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type",
+                    "Access-Control-Max-Age": "86400",
+                },
+            });
+        }
+
         try {
             const {
                 origin,
@@ -161,4 +185,4 @@ export default {
             return error(err.message);
         }
     }
-}
+};
