@@ -229,22 +229,21 @@
             }
 
             var depthTbody = document.getElementById('queueDepthBody');
-            if (data.per_fakeid_pending) {
-                var keys = Object.keys(data.per_fakeid_pending);
-                if (keys.length > 0) {
-                    keys.sort(function(a, b) { return (data.per_fakeid_pending[b] || 0) - (data.per_fakeid_pending[a] || 0); });
-                    var html = '';
-                    var maxShow = Math.min(keys.length, 20);
-                    for (var i = 0; i < maxShow; i++) {
-                        var fid = keys[i];
-                        var cnt = data.per_fakeid_pending[fid];
-                        html += '<tr><td>' + escapeHtml(fid) + '</td><td style="font-family:monospace;font-size:12px">' + fid.slice(0, 12) + '...</td><td>' + cnt + '</td></tr>';
-                    }
-                    if (keys.length > 20) {
-                        html += '<tr><td colspan="3" style="color:var(--muted);text-align:center">... 还有 ' + (keys.length - 20) + ' 个 fakeid</td></tr>';
-                    }
-                    depthTbody.innerHTML = html;
-                } else {
+            if (data.per_fakeid_pending && data.per_fakeid_pending.length > 0) {
+                var items = data.per_fakeid_pending;
+                var html = '';
+                var maxShow = Math.min(items.length, 20);
+                for (var i = 0; i < maxShow; i++) {
+                    var item = items[i];
+                    html += '<tr><td>' + escapeHtml(item.nickname || item.fakeid) + '</td>'
+                        + '<td style="font-family:monospace;font-size:12px">' + (item.fakeid ? item.fakeid.slice(0, 12) + '...' : '-') + '</td>'
+                        + '<td>' + item.count + '</td></tr>';
+                }
+                if (items.length > 20) {
+                    html += '<tr><td colspan="3" style="color:var(--muted);text-align:center">... 还有 ' + (items.length - 20) + ' 个 fakeid</td></tr>';
+                }
+                depthTbody.innerHTML = html;
+            } else {
                     depthTbody.innerHTML = '<tr><td colspan="3" style="color:var(--muted);text-align:center">队列为空</td></tr>';
                 }
             } else {
