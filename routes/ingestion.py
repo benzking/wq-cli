@@ -108,17 +108,7 @@ async def retry_ingestion(req: RetryRequest):
 @router.get("/admin/ingestion/worker-status", summary="Worker 运行状态")
 async def worker_status():
     from utils.fetch_worker import fetch_worker
-    from utils.ingestion_store import pending_count
-    from utils.fetch_router import fetcher_router
-    return {
-        "success": True,
-        "data": {
-            "running": fetch_worker.is_running,
-            "paused": fetch_worker.is_paused,
-            "pending_count": pending_count(),
-            "fetchers": fetcher_router.all_status(),
-        },
-    }
+    return {"success": True, "data": fetch_worker.status}
 
 
 @router.post("/admin/ingestion/worker/trigger", summary="手动唤醒 Worker")
