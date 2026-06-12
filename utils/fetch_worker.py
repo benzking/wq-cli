@@ -16,7 +16,7 @@ import logging
 import time
 import os
 import secrets
-from typing import Optional
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,27 @@ class FetchWorker:
         self._task: Optional[asyncio.Task] = None
         self._tokens = 0.0
         self._last_token_time = 0.0
+        self._current_task: Optional[Dict] = None
+        self._current_task_start: Optional[float] = None
+
+    @property
+    def status(self) -> dict:
+        from utils.ingestion_store import pending_count, pending_per_fakeid
+        from utils.fetch_router import fetcher_router
+        return {
+            "running": self._running,
+            "paused": self._paused,
+            "current_task": {
+                "fakeid": self._current_task["fakeid"],
+                "link": self._current_task["link"],
+                "title": self._current_task.get("title", ""),
+                "nickname": self._current_task.get("nickname", ""),
+                "fetcher": self._current_task.get("fetcher", ""),
+            } if self._current_task else None,
+            "pending_count": pending_count(),
+            "per_fakeid_pending": pending_per_fakeid(),
+            "fetchers": fetcher_router.all_status(),
+        }
 
     async def start(self):
         if self._running:
@@ -77,6 +98,8 @@ class FetchWorker:
 
     async def stop(self):
         self._running = False
+        self._current_task = None
+        self._current_task_start = None
         self._wake_event.set()
         if self._task:
             self._task.cancel()
@@ -111,6 +134,8 @@ class FetchWorker:
                 raise
             except Exception as e:
                 logger.error("Worker cycle crashed: %s", e, exc_info=True)
+                self._current_task = None
+                self._current_task_start = None
                 await asyncio.sleep(10)
 
     async def _do_cycle(self):
@@ -172,6 +197,16 @@ class FetchWorker:
                 await asyncio.sleep(cfg["fetch_interval"])
                 continue
 
+            self._current_task = {
+                "fakeid": fakeid,
+                "link": article_link,
+                "title": task.get("title", ""),
+                "nickname": task.get("nickname", ""),
+                "fetcher": fetcher_name,
+                "tid": tid,
+            }
+            self._current_task_start = time.monotonic()
+
             # 构建 URL 和 headers
             full_url = article_link
             token = os.getenv("WECHAT_TOKEN", "")
@@ -210,6 +245,9 @@ class FetchWorker:
                     self._handle_success(task, html, fetcher_name, latency_ms, tid)
             else:
                 self._handle_failure(task, fetcher_name, "network_error", latency_ms, tid)
+
+            self._current_task = None
+            self._current_task_start = None
 
             # 间隔等待
             await asyncio.sleep(cfg["fetch_interval"])
