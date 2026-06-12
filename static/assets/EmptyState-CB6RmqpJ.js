@@ -1,0 +1,6 @@
+import{h as r,t as e,g as t,F as l,w as i,q as d,k as p,A as u,z as o,d as y}from"./index-CyNTlXg9.js";/**
+ * @license lucide-vue-next v1.0.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const m=r("inbox",[["polyline",{points:"22 12 16 12 14 15 10 15 8 12 2 12",key:"o97t9d"}],["path",{d:"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z",key:"oot6mr"}]]),x={class:"p-4"},b={__name:"SkeletonLoader",props:{lines:{type:Number,default:4}},setup(s){return(n,c)=>(e(),t("div",x,[(e(!0),t(l,null,i(s.lines,a=>(e(),t("div",{key:a,class:"skeleton mb-3",style:d({height:"12px",width:92-a*10+"%",opacity:1-a*.08})},null,4))),128))]))}},_={class:"flex flex-col items-center justify-center py-20 px-5"},h={key:0,class:"w-16 h-16 rounded-2xl flex items-center justify-center mb-4",style:{background:"var(--bg-hover)"}},f={key:1,class:"text-[48px] mb-4 opacity-40"},k={class:"text-[13px] font-medium",style:{color:"var(--text-muted)"}},g={__name:"EmptyState",props:{icon:{type:String,default:""},text:{type:String,default:"暂无数据"}},setup(s){return(n,c)=>(e(),t("div",_,[s.icon?(e(),t("span",f,o(s.icon),1)):(e(),t("div",h,[p(u(m),{size:28,style:{color:"var(--text-muted)",opacity:"0.5"}})])),y("p",k,o(s.text),1)]))}};export{b as _,g as a};

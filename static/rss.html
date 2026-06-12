@@ -512,7 +512,8 @@
                     html += '<div class="sub-item-info">';
                     html += '<div class="name">' + escHtml(s.nickname || s.fakeid) + '</div>';
                     html += '<div class="sub-item-meta">';
-                    html += '<span>' + s.article_count + ' 篇文章</span>';
+                    html += '<span>已抓取: ' + (s.regular_article_count !== undefined ? s.regular_article_count : s.article_count) + ' 篇</span>';
+                    html += '<span>全部: ' + s.article_count + ' 篇</span>';
                     html += '<span>最后轮询: ' + lastPoll + '</span>';
                     if (s.category_name) html += '<span style="color:var(--primary-color);">' + escHtml(s.category_name) + '</span>';
                     html += '</div></div>';
