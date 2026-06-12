@@ -135,6 +135,48 @@ async function handleSinglePoll(fakeid) {
   }
 }
 
+// ── depth fetch ─────────────────────────────────────
+const historyFetchTarget = ref(null)
+const historyFetchName = ref('')
+const historyFetchCount = ref(10)
+const historyFetchLoading = ref(false)
+
+function openHistoryFetch(fakeid, nickname) {
+  historyFetchTarget.value = fakeid
+  historyFetchName.value = nickname || ''
+  historyFetchCount.value = 10
+  historyFetchLoading.value = false
+}
+
+function closeHistoryFetch() {
+  historyFetchTarget.value = null
+}
+
+async function confirmHistoryFetch() {
+  if (!historyFetchTarget.value) return
+  const count = Math.min(100, Math.max(1, parseInt(historyFetchCount.value) || 1))
+  historyFetchLoading.value = true
+  try {
+    const res = await fetch('/api/admin/history/fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fakeid: historyFetchTarget.value, count }),
+    })
+    const data = await res.json()
+    if (data.success) {
+      toast.success(data.message || '获取完成')
+      await loadSubscriptions()
+    } else {
+      toast.error(data.message || '获取失败')
+    }
+  } catch (e) {
+    toast.error('网络错误: ' + e.message)
+  } finally {
+    historyFetchLoading.value = false
+    closeHistoryFetch()
+  }
+}
+
 // ── column resize ────────────────────────────────────
 const COL_KEYS = ['name','all','ingested','non_ingested','poll','category','actions']
 
@@ -388,6 +430,9 @@ function avatarBg(i) {
           <button class="btn btn-xs" @click="openCategory(s.fakeid)" title="更改分类">
             <Tag :size="11" /> 分类
           </button>
+          <button class="btn btn-xs" @click="openHistoryFetch(s.fakeid, s.nickname)" title="深度获取历史文章">
+            深度获取
+          </button>
           <button class="btn btn-xs" style="color:var(--error);border-color:rgba(189,60,60,0.25);" @click="openConfirm(s.fakeid)" title="取消订阅">
             <Trash2 :size="11" /> 取消
           </button>
@@ -424,6 +469,7 @@ function avatarBg(i) {
           <button class="btn btn-xs flex-1" @click="copyLink('/api/rss/' + s.fakeid, 'RSS 链接')"><Rss :size="10" /> RSS</button>
           <button class="btn btn-xs flex-1" @click="copyLink('/api/rss/' + s.fakeid + '/history', '历史 RSS')"><History :size="10" /> 历史</button>
           <button class="btn btn-xs flex-1" @click="openCategory(s.fakeid)"><Tag :size="10" /> 分类</button>
+          <button class="btn btn-xs flex-1" @click="openHistoryFetch(s.fakeid, s.nickname)">深度获取</button>
           <button class="btn btn-xs flex-1" style="color:var(--error);border-color:rgba(189,60,60,0.25);" @click="openConfirm(s.fakeid)"><Trash2 :size="10" /> 取消</button>
         </div>
       </div>
@@ -462,5 +508,47 @@ function avatarBg(i) {
       @confirm="handleConfirmUnsubscribe"
       @cancel="confirmTarget = null"
     />
+
+    <!-- Depth Fetch Modal -->
+    <Teleport to="body">
+      <transition name="scale">
+        <div
+          v-if="!!historyFetchTarget"
+          class="fixed inset-0 z-[999] flex items-center justify-center p-5"
+          style="background: rgba(0,0,0,0.35); backdrop-filter: blur(4px);"
+          @click.self="closeHistoryFetch"
+        >
+          <div class="w-full max-w-[360px] rounded-2xl p-6 shadow-lg"
+            style="background: var(--bg-primary);"
+          >
+            <h3 class="text-[15px] font-semibold mb-1" style="color: var(--text-primary);">深度获取</h3>
+            <p class="text-[13px] mb-4" style="color: var(--text-secondary);">
+              获取「{{ historyFetchName }}」的历史文章
+            </p>
+
+            <div class="flex items-center gap-3 mb-5">
+              <label class="text-[13px] font-semibold shrink-0" style="color: var(--text-primary);">获取数量</label>
+              <input
+                v-model.number="historyFetchCount"
+                type="number"
+                min="1"
+                max="100"
+                class="w-20 py-1.5 px-2.5 border rounded-md text-[13px] outline-none"
+                style="border-color: var(--border-base); color: var(--text-primary); background: var(--bg-primary);"
+                :disabled="historyFetchLoading"
+              />
+              <span class="text-[11px]" style="color: var(--text-muted);">篇 (1-100)</span>
+            </div>
+
+            <div class="flex gap-2.5 justify-end">
+              <button class="btn" :disabled="historyFetchLoading" @click="closeHistoryFetch">取消</button>
+              <button class="btn btn-primary" :disabled="historyFetchLoading" @click="confirmHistoryFetch">
+                {{ historyFetchLoading ? '获取中...' : '确定' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
