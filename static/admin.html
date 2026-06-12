@@ -471,6 +471,53 @@
             color: var(--text-secondary);
             line-height: 1.8;
         }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
+        }
+        @media (max-width: 768px) {
+            .status-grid { grid-template-columns: 1fr; }
+        }
+        .status-line {
+            font-size: var(--font-sm);
+            margin: 6px 0;
+            color: var(--text-secondary);
+        }
+        .status-line .label {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-right: 6px;
+        }
+        .collapse-section {
+            margin-top: 10px;
+        }
+        .collapse-header {
+            font-size: var(--font-xs);
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px 0;
+            user-select: none;
+        }
+        .collapse-header:hover {
+            color: var(--primary-color);
+        }
+        .collapse-body {
+            font-size: var(--font-xs);
+            color: var(--text-secondary);
+        }
+        .channel-item {
+            padding: 4px 0 4px 16px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .channel-item .icon { font-size: 14px; }
+        .channel-item .name { font-weight: 600; }
+        .channel-item .state { color: var(--text-muted); }
     </style>
 </head>
 <body>
@@ -500,6 +547,64 @@
             </div>
             <div class="status-actions" id="statusActions">
                 <button class="btn-sm" onclick="checkStatus()">刷新</button>
+            </div>
+        </div>
+
+        <!-- Worker & Poller Status -->
+        <div class="status-grid" id="taskStatusGrid" style="display:none;">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon blue">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                            <path d="M2 17l10 5 10-5"/>
+                            <path d="M2 12l10 5 10-5"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="card-title">入库 Worker</div>
+                        <div class="card-desc">实时抓取状态</div>
+                    </div>
+                </div>
+                <div class="worker-status-body" id="workerStatusBody">
+                    <div class="status-line"><span class="label">状态:</span> <span id="workerStatus">检查中...</span></div>
+                    <div class="status-line"><span class="label">队列:</span> <span id="workerQueueCount">-</span> 篇</div>
+                    <div class="status-line" id="workerCurrentLine" style="display:none;">
+                        <span class="label">当前:</span>
+                        <span id="workerCurrentTask"></span>
+                    </div>
+                    <div class="collapse-section" id="workerChannels">
+                        <div class="collapse-header" onclick="toggleCollapse('workerChannelList')">
+                            <span id="workerChannelToggle">&#9654;</span> 渠道详情
+                        </div>
+                        <div class="collapse-body" id="workerChannelList" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon orange">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                            <polyline points="23 4 23 10 17 10"/>
+                            <polyline points="1 20 1 14 7 14"/>
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="card-title">RSS 轮询器</div>
+                        <div class="card-desc">公众号文章自动轮询</div>
+                    </div>
+                </div>
+                <div class="poller-status-body" id="pollerStatusBody">
+                    <div class="status-line"><span class="label">状态:</span> <span id="pollerStatus">检查中...</span></div>
+                    <div class="status-line" id="pollerProgressLine">
+                        <span class="label">进度:</span> <span id="pollerProgress"></span>
+                    </div>
+                    <div class="status-line" id="pollerCurrentLine" style="display:none;">
+                        <span class="label">当前:</span> <span id="pollerCurrentNickname"></span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -568,6 +673,7 @@
                 <ul class="nav-list">
                     <li><a href="/api/health" target="_blank"><span>健康检查</span><span class="arrow">&#8250;</span></a></li>
                     <li><a href="/api/stats" target="_blank"><span>限频统计</span><span class="arrow">&#8250;</span></a></li>
+                    <li><a href="/status.html"><span>服务状态</span><span class="arrow">&#8250;</span></a></li>
                     <li><a href="/logs.html"><span>平台日志</span><span class="arrow">&#8250;</span></a></li>
                 </ul>
             </div>
@@ -810,6 +916,141 @@
         });
 
         window.addEventListener('load', checkStatus);
+
+        // ── Worker & Poller 状态 ──
+
+        var statusRefreshInterval = 3000;
+
+        function updateWorkerCard(data) {
+            var el = document.getElementById('workerStatus');
+            if (!data.running) { el.textContent = '已停止'; el.style.color = 'var(--error-color)'; }
+            else if (data.paused) { el.textContent = '已暂停'; el.style.color = 'var(--warning-color)'; }
+            else { el.textContent = '\u25cf 运行中'; el.style.color = 'var(--success-color)'; }
+
+            document.getElementById('workerQueueCount').textContent = data.pending_count ?? '-';
+
+            var currentLine = document.getElementById('workerCurrentLine');
+            var currentEl = document.getElementById('workerCurrentTask');
+            if (data.current_task) {
+                currentLine.style.display = '';
+                var title = data.current_task.title || '未知';
+                var link = data.current_task.link || '#';
+                var nickname = data.current_task.nickname || data.current_task.fakeid || '';
+                currentEl.innerHTML = '<a href="' + link + '" target="_blank" style="color:var(--primary-color);text-decoration:none">'
+                    + escapeHtml(nickname) + ' \u00b7 ' + escapeHtml(title) + '</a>';
+            } else {
+                currentLine.style.display = 'none';
+            }
+
+            var channelList = document.getElementById('workerChannelList');
+            if (data.fetchers && data.fetchers.length > 0) {
+                var html = '';
+                for (var i = 0; i < data.fetchers.length; i++) {
+                    var f = data.fetchers[i];
+                    var active = data.current_task && data.current_task.fetcher === f.name;
+                    var icon = f.state === 'active' ? (active ? '\ud83d\udfe2' : '\u2705') : f.state === 'cooling' ? '\u23f3' : '\u274c';
+                    var stateText = active ? '正在抓取' : (f.state === 'active' ? '空闲' : f.state === 'cooling' ? '冷却中' : '已熔断');
+                    html += '<div class="channel-item">'
+                        + '<span class="icon">' + icon + '</span>'
+                        + '<span class="name">' + escapeHtml(f.label || f.name) + '</span>'
+                        + '<span class="state">' + stateText + '</span>'
+                        + '</div>';
+                }
+                channelList.innerHTML = html;
+            } else {
+                channelList.innerHTML = '<div style="padding:8px 16px;color:var(--text-muted)">暂无渠道</div>';
+            }
+
+            var grid = document.getElementById('taskStatusGrid');
+            grid.style.display = 'grid';
+        }
+
+        function updatePollerCard(data) {
+            var el = document.getElementById('pollerStatus');
+            if (!data.running) {
+                el.textContent = '已停止';
+                el.style.color = 'var(--error-color)';
+            } else {
+                el.textContent = '\u25cf 运行中';
+                el.style.color = 'var(--success-color)';
+            }
+
+            var progressEl = document.getElementById('pollerProgress');
+            var currentEl = document.getElementById('pollerCurrentLine');
+            var nicknameEl = document.getElementById('pollerCurrentNickname');
+
+            if (data.batch_progress) {
+                progressEl.textContent = data.batch_progress.done + '/' + data.batch_progress.total;
+                if (data.current_nickname) {
+                    currentEl.style.display = '';
+                    nicknameEl.textContent = data.current_nickname;
+                } else {
+                    currentEl.style.display = 'none';
+                }
+            } else if (data.next_poll) {
+                var mins = Math.round(data.next_poll.in_seconds / 60);
+                var timeStr = '';
+                if (data.next_poll.in_seconds < 60) {
+                    timeStr = data.next_poll.in_seconds + ' 秒后';
+                } else {
+                    var d = new Date(data.next_poll.timestamp * 1000);
+                    timeStr = d.toTimeString().slice(0, 8) + ' (约 ' + mins + ' 分钟后)';
+                }
+                progressEl.textContent = '空闲等待  下次轮询: ' + timeStr;
+                currentEl.style.display = 'none';
+            } else {
+                progressEl.textContent = '等待首次轮询';
+                currentEl.style.display = 'none';
+            }
+
+            var grid = document.getElementById('taskStatusGrid');
+            grid.style.display = 'grid';
+        }
+
+        function toggleCollapse(id) {
+            var el = document.getElementById(id);
+            var toggle = document.getElementById('workerChannelToggle');
+            if (el.style.display === 'none') {
+                el.style.display = 'block';
+                toggle.innerHTML = '\u25bc';
+            } else {
+                el.style.display = 'none';
+                toggle.innerHTML = '\u25b6';
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        async function refreshTaskStatus() {
+            var busy = false;
+            try {
+                var [wRes, pRes] = await Promise.all([
+                    fetch('/api/admin/ingestion/worker-status'),
+                    fetch('/api/rss/status'),
+                ]);
+                if (!wRes.ok || !pRes.ok) throw new Error('fetch failed');
+                var wData = (await wRes.json()).data;
+                var pData = (await pRes.json()).data;
+                if (wData) updateWorkerCard(wData);
+                if (pData) updatePollerCard(pData);
+                busy = !!(wData && wData.current_task) || !!(pData && pData.batch_progress);
+            } catch (e) {
+                console.error('Status refresh error:', e);
+            }
+            var next = busy ? 3000 : 10000;
+            if (next !== statusRefreshInterval) {
+                statusRefreshInterval = next;
+                clearInterval(window._statusTimer);
+                window._statusTimer = setInterval(refreshTaskStatus, statusRefreshInterval);
+            }
+        }
+
+        window.addEventListener('load', function() {
+            refreshTaskStatus();
+        });
     </script>
 </body>
 </html>
