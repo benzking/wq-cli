@@ -188,9 +188,17 @@ class CFWorkerClient:
         if resp.status_code == 200 and len(resp.text) > 500:
             return resp.text
 
-        raise Exception(
-            f"CF Worker returned status={resp.status_code} len={len(resp.text)}"
-        )
+        reason = f"status={resp.status_code} len={len(resp.text)}"
+        try:
+            err_data = resp.json()
+            if isinstance(err_data, dict) and "error" in err_data:
+                retry_flag = err_data.get("retry", False)
+                reason = f"worker_error={err_data['error']} retry={retry_flag} status={resp.status_code}"
+        except Exception:
+            if resp.text:
+                reason = f"status={resp.status_code} len={len(resp.text)} body={resp.text[:200]}"
+
+        raise Exception(f"CF Worker returned {reason}")
 
     async def _health_check_loop(self):
         """后台每 300s 探测所有节点"""
