@@ -50,6 +50,8 @@ def main():
     p_sub = sub.add_parser("subscribe", help="Add RSS subscription")
     p_sub.add_argument("fakeid", help="Account FakeID")
     p_sub.add_argument("--nickname", default="", help="Account nickname")
+    p_sub.add_argument("--alias", default="", help="Account wechat ID (微信号)")
+    p_sub.add_argument("--head-img", default="", help="Account head image URL")
 
     # unsubscribe
     p_unsub = sub.add_parser("unsubscribe", help="Remove subscription")
@@ -136,7 +138,7 @@ def _dispatch(args):
         cmd_info(args.fakeid)
     elif cmd == "subscribe":
         from cli.subscribe import cmd_subscribe
-        cmd_subscribe(args.fakeid, args.nickname)
+        cmd_subscribe(args.fakeid, args.nickname, alias=args.alias, head_img=args.head_img)
     elif cmd == "unsubscribe":
         from cli.subscribe import cmd_unsubscribe
         cmd_unsubscribe(args.fakeid)

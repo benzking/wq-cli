@@ -2,8 +2,11 @@
 from cli.core import _req, _ok, _fail
 
 
-def cmd_subscribe(fakeid, nickname=""):
-    code, d = _req("POST", "/rss/subscribe", body={"fakeid": fakeid, "nickname": nickname})
+def cmd_subscribe(fakeid, nickname="", alias="", head_img=""):
+    code, d = _req("POST", "/rss/subscribe", body={
+        "fakeid": fakeid, "nickname": nickname,
+        "alias": alias, "head_img": head_img,
+    })
     if code != 200:
         _fail(f"Subscribe failed: HTTP {code}")
     _ok({"message": d.get("message", "Subscribed"), "fakeid": fakeid})
@@ -23,9 +26,9 @@ def cmd_subscriptions(fmt="json"):
     subs = d.get("data", [])
     if fmt == "table":
         from cli.core import _format_table
-        rows = [[s.get("nickname", ""), s["fakeid"], s.get("article_count", 0),
-                 s.get("rss_url", "")] for s in subs]
-        print(_format_table(rows, ["Nickname", "FakeID", "Articles", "RSS URL"]))
+        rows = [[s.get("nickname", ""), s.get("alias", ""), s["fakeid"],
+                 s.get("article_count", 0), s.get("ingested_count", 0)] for s in subs]
+        print(_format_table(rows, ["Nickname", "Alias", "FakeID", "Articles", "Ingested"]))
         import sys
         sys.exit(0)
     _ok(subs)

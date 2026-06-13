@@ -8,6 +8,11 @@ def cmd_check(auto_recover=False):
 
     result = {
         "service_healthy": code_h == 200 and health.get("status") == "healthy",
+        "version": health.get("version", ""),
+        "framework": health.get("framework", ""),
+        "http_engine": health.get("http_engine", ""),
+        "proxy_pool": health.get("proxy_pool", {}),
+        "fallback": health.get("fallback", {}),
         "authenticated": status.get("authenticated", False),
         "is_expired": status.get("isExpired", True),
         "login_status_text": status.get("status", "未知"),

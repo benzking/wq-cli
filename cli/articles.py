@@ -59,7 +59,8 @@ def _articles_from_api(fakeid, hours, keyword, limit, fmt):
     code, d = _req("GET", f"/public/articles?{qs}")
     if code != 200 or not d.get("success"):
         _fail(d.get("error", f"API fallback failed: HTTP {code}"))
-    articles = d.get("data", [])
+    data = d.get("data", {})
+    articles = data.get("articles", []) if isinstance(data, dict) else data
     if fmt == "table":
         _articles_table(articles)
     _ok(articles)

@@ -5,7 +5,7 @@
       "description": "Health + login status check",
       "args": [],
       "options": ["--auto-recover"],
-      "output": {"ok": "bool", "data": {"service_healthy": "bool", "authenticated": "bool", "is_expired": "bool"}}
+      "output": {"ok": "bool", "data": {"service_healthy": "bool", "version": "str", "framework": "str", "http_engine": "str", "proxy_pool": "dict", "fallback": "dict", "authenticated": "bool", "is_expired": "bool"}}
     },
     "status": {
       "description": "Auth status only (JSON alias for check)",
@@ -26,7 +26,7 @@
     "subscribe": {
       "description": "Add RSS subscription for a WeChat account",
       "args": ["<fakeid: str>"],
-      "options": ["--nickname=str"],
+      "options": ["--nickname=str", "--alias=str", "--head-img=str"],
       "output": {"ok": "bool", "data": {"message": "str", "fakeid": "str"}}
     },
     "unsubscribe": {
@@ -35,16 +35,16 @@
       "output": {"ok": "bool", "data": {"message": "str"}}
     },
     "subscriptions": {
-      "description": "List all RSS subscriptions with article counts and RSS URLs",
+      "description": "List all RSS subscriptions with article counts, alias, ingested counts",
       "options": ["--format=json|table"],
-      "output": {"ok": "bool", "data": "[{fakeid, nickname, article_count, rss_url, historical_count}]"}
+      "output": {"ok": "bool", "data": "[{fakeid, nickname, alias, article_count, ingested_count, non_ingested_count, historical_count, rss_url}]"}
     },
     "poll": {
       "description": "Manually trigger full RSS poll for all subscriptions",
       "output": {"ok": "bool", "data": {"message": "str"}}
     },
     "articles": {
-      "description": "Query cached articles from SQLite with API fallback (Level 4)",
+      "description": "Query cached articles from SQLite with API fallback",
       "options": ["--hours=N", "--keyword=K", "--fakeid=F", "--limit=N", "--format=json|table"],
       "output": {"ok": "bool", "data": "[{id, nickname, title, link, digest, publish_time_str}]"}
     },

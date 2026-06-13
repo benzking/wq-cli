@@ -41,7 +41,7 @@ wq check
 
 ### 基础检查
 ```bash
-wq check                          # 健康 + 登录状态 (JSON)
+wq check                          # 健康 + 登录状态 (含 version/framework/proxy_pool/fallback)
 wq check --auto-recover           # 健康检查 + 失败时尝试自动重启
 wq status                         # 仅认证状态 (JSON)
 ```
@@ -55,10 +55,10 @@ wq info <fakeid>                   # 认证主体、状态、原创文章数
 
 ### 订阅管理
 ```bash
-wq subscribe <fakeid> --nickname=<名称>
+wq subscribe <fakeid> --nickname=<名称> [--alias=<微信号>] [--head-img=<URL>]
 wq unsubscribe <fakeid>
-wq subscriptions                   # JSON 列表
-wq subscriptions --format=table    # 表格展示
+wq subscriptions                   # JSON 列表 (含 alias/ingested/historical)
+wq subscriptions --format=table    # 表格展示 (Nickname, Alias, FakeID, Articles, Ingested)
 wq poll                            # 手动触发全量轮询
 ```
 
